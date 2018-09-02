@@ -1,7 +1,6 @@
 #include <glad/glad.h>
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
 
 #include <stb_image.h>
 
@@ -36,6 +35,8 @@ glm::vec3 secondPos(0.0f, 1.25f, 0.0f);
 glm::vec3 thirdPos(0.0f, 2.5f, 0.0f);
 
 struct Resources {
+    unsigned int ticks;
+    Uint32 last_time;
     Shader lightingShader;
     Camera camera;
     std::vector<glm::vec3> colors;
@@ -175,6 +176,8 @@ Resources load_resources() {
     Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
 
     return Resources {
+        0,
+        0,
         Shader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"},
         std::move(camera),
         std::move(colors),
@@ -191,7 +194,14 @@ Resources load_resources() {
 
 void update(const Input& input, Resources& res) {
 
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    auto now = SDL_GetTicks();
+    const auto fps_time = 1000;
+    if (now > res.last_time + fps_time) {
+        std::cout << "FPS: " << (res.ticks / (fps_time / 1000)) << std::endl;
+        res.last_time = now;
+        res.ticks = 0;
+    }
+    glClearColor(0.55f, 0.55f, 0.55f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float deltaTime = 1.0f / 30.0f;
@@ -243,10 +253,17 @@ void update(const Input& input, Resources& res) {
         res.last_mouse_y = -1;
     }
 
+    auto width = res.width;
+    auto height = res.height;
+
+    float gap = res.cur_voxel_gap;
+
+    float half_width = width / 2 * gap * 1.16666f;
+    float half_height = height / 2 * gap;
         // be sure to activate shader when setting uniforms/drawing objects
     res.lightingShader.use();
     res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
-    res.lightingShader.setVec3("lightPos", lightPos);
+    res.lightingShader.setVec3("lightPos", glm::vec3{half_width, half_height, 400.0f});
 
     // view/projection transformations
     glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
@@ -256,14 +273,6 @@ void update(const Input& input, Resources& res) {
 
     // world transformation
 
-    float gap = res.cur_voxel_gap;
-
-    auto width = res.width;
-    auto height = res.height;
-
-    auto half_width = width / 2 * gap * 1.16666f;
-    auto half_height = height / 2 * gap;
-
     int index = 0;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
@@ -271,6 +280,8 @@ void update(const Input& input, Resources& res) {
             index ++;
         }
     }
+
+    res.ticks++;
 }
 
 int main()
