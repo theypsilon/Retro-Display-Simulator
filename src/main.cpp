@@ -1,13 +1,14 @@
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
+#include <stb_image.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <stb_image.h>
+
 
 #include <learnopengl/filesystem.h>
 #include <learnopengl/shader_m.h>
@@ -15,11 +16,6 @@
 
 #include <vector>
 #include <iostream>
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-void processInput(GLFWwindow *window);
 
 // settings
 const unsigned int SCR_WIDTH = 1920 * 2;
@@ -47,6 +43,8 @@ struct Resources {
     unsigned int cubeVAO;
     unsigned int width, height;
     int last_mouse_x, last_mouse_y;
+    float cur_voxel_gap;
+    float min_voxel_gap;
 };
 
 struct Input {
@@ -60,7 +58,11 @@ struct Input {
     look_right = false,
     look_up = false,
     look_down = false,
-    mouse_click_left = false;
+    spread_voxels = false,
+    collapse_voxels = false,
+    mouse_click_left = false,
+    speed_up = false,
+    speed_down = false;
     int mouse_motion_x = -1;
     int mouse_motion_y = -1;
 };
@@ -110,47 +112,47 @@ Resources load_resources() {
     std::cout << "Colors OK" << std::endl;
 
     float vertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+         0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+         0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+         0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+        -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
 
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+        -0.5f * 1.16666f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+         0.5f * 1.16666f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+        -0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+        -0.5f * 1.16666f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
 
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * 1.16666f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * 1.16666f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * 1.16666f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * 1.16666f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * 1.16666f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * 1.16666f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
 
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * 1.16666f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * 1.16666f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * 1.16666f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * 1.16666f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * 1.16666f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * 1.16666f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
 
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+         0.5f * 1.16666f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+         0.5f * 1.16666f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+         0.5f * 1.16666f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f * 1.16666f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
 
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+        -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+         0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+        -0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+        -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO;
@@ -170,8 +172,7 @@ Resources load_resources() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    Camera camera{glm::vec3{128.0f, 112.0f, 270.0f}};
-    camera.MovementSpeed *= 10;
+    Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
 
     return Resources {
         Shader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"},
@@ -182,7 +183,9 @@ Resources load_resources() {
         width,
         height,
         -1,
-        -1
+        -1,
+        1.0f,
+        1.0f
     };
 }
 
@@ -192,6 +195,23 @@ void update(const Input& input, Resources& res) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float deltaTime = 1.0f / 30.0f;
+
+    if (input.speed_up)
+        res.camera.MovementSpeed *= 1.05f;
+    if (input.speed_down)
+        res.camera.MovementSpeed /= 1.05f;
+
+    if (res.camera.MovementSpeed > 10000)
+        res.camera.MovementSpeed = 10000;
+    if (res.camera.MovementSpeed < 0.1)
+        res.camera.MovementSpeed = 0.1f;
+
+    if (input.spread_voxels)
+        res.cur_voxel_gap += 0.5f * deltaTime;
+    if (input.collapse_voxels)
+        res.cur_voxel_gap -= 0.5f * deltaTime;
+    if (res.cur_voxel_gap <= res.min_voxel_gap)
+        res.cur_voxel_gap = res.min_voxel_gap;
 
     if (input.walk_up)
         res.camera.ProcessKeyboard(UP, deltaTime);
@@ -229,19 +249,25 @@ void update(const Input& input, Resources& res) {
     res.lightingShader.setVec3("lightPos", lightPos);
 
     // view/projection transformations
-    glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
     res.lightingShader.setMat4("projection", projection);
     res.lightingShader.setMat4("view", view);
 
     // world transformation
 
-    float gap = 1.05f;
+    float gap = res.cur_voxel_gap;
+
+    auto width = res.width;
+    auto height = res.height;
+
+    auto half_width = width / 2 * gap * 1.16666f;
+    auto half_height = height / 2 * gap;
 
     int index = 0;
-    for (int y = 0; y < res.height; y++) {
-        for (int x = 0; x < res.width; x++) {
-            drawCube(res, glm::vec3{x * gap, y * gap, 0.0f}, res.colors[index]);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            drawCube(res, glm::vec3{(float) x * gap * 1.16666f - half_width, (float) y * gap - half_height, 0.0f}, res.colors[index]);
             index ++;
         }
     }
@@ -259,10 +285,11 @@ int main()
     atexit (SDL_Quit);
 
     // Request an OpenGL 4.5 context (should be core)
-    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     // Also request a depth buffer
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
@@ -296,14 +323,31 @@ int main()
         return -1;
     }
 
-    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glEnable(GL_DEPTH_TEST);
 
     Input input;
     Resources res = load_resources();
 
+    const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+
     bool loop = true;
     while (loop)
     {
+
+        if (kbstate[SDL_SCANCODE_A]) { input.walk_left = true; } else { input.walk_left = false; }
+        if (kbstate[SDL_SCANCODE_D]) { input.walk_right = true; } else { input.walk_right = false; }
+        if (kbstate[SDL_SCANCODE_W]) { input.walk_forward = true; } else { input.walk_forward = false; }
+        if (kbstate[SDL_SCANCODE_S]) { input.walk_backward = true; } else { input.walk_backward = false; }
+        if (kbstate[SDL_SCANCODE_Q]) { input.walk_up = true; } else { input.walk_up = false; }
+        if (kbstate[SDL_SCANCODE_E]) { input.walk_down = true; } else { input.walk_down = false; }
+        if (kbstate[SDL_SCANCODE_J]) { input.spread_voxels = true; } else { input.spread_voxels = false; }
+        if (kbstate[SDL_SCANCODE_K]) { input.collapse_voxels = true; } else { input.collapse_voxels = false; }
+        if (kbstate[SDL_SCANCODE_F]) { input.speed_up = true; } else { input.speed_up = false; }
+        if (kbstate[SDL_SCANCODE_R]) { input.speed_down = true; } else { input.speed_down = false; }
+        if (kbstate[SDL_SCANCODE_UP]) { input.look_left = true; } else { input.look_left = false; }
+        if (kbstate[SDL_SCANCODE_DOWN]) { input.look_right = true; } else { input.look_right = false; }
+        if (kbstate[SDL_SCANCODE_LEFT]) { input.look_up = true; } else { input.look_up = false; }
+        if (kbstate[SDL_SCANCODE_RIGHT]) { input.look_down = true; } else { input.look_down = false; }
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -315,30 +359,6 @@ int main()
                         case SDLK_ESCAPE:
                             loop = false;
                             break;
-                        case SDLK_a: input.walk_left = true; break;
-                        case SDLK_d: input.walk_right = true; break;
-                        case SDLK_w: input.walk_forward = true; break;
-                        case SDLK_s: input.walk_backward = true; break;
-                        case SDLK_q: input.walk_up = true; break;
-                        case SDLK_e: input.walk_down = true; break;
-                        case SDLK_UP: input.look_left = true; break;
-                        case SDLK_DOWN: input.look_right = true; break;
-                        case SDLK_LEFT: input.look_up = true; break;
-                        case SDLK_RIGHT: input.look_down = true; break;
-                    }
-                    break;
-                case SDL_KEYUP:
-                    switch (event.key.keysym.sym) {
-                        case SDLK_a: input.walk_left = false; break;
-                        case SDLK_d: input.walk_right = false; break;
-                        case SDLK_w: input.walk_forward = false; break;
-                        case SDLK_s: input.walk_backward = false; break;
-                        case SDLK_q: input.walk_up = false; break;
-                        case SDLK_e: input.walk_down = false; break;
-                        case SDLK_UP: input.look_left = false; break;
-                        case SDLK_DOWN: input.look_right = false; break;
-                        case SDLK_LEFT: input.look_up = false; break;
-                        case SDLK_RIGHT: input.look_down = false; break;
                     }
                     break;
                 case SDL_MOUSEBUTTONDOWN:
@@ -372,155 +392,5 @@ int main()
 
 
     return 0;
-    /*
-    // glfw: initialize and configure
-    // ------------------------------
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
-#endif
-
-    // glfw window creation
-    // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
-    if (window == NULL)
-    {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-
-    // tell GLFW to capture our mouse
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    // glad: load all OpenGL function pointers
-    // ---------------------------------------
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-
-    // configure global opengl state
-    // -----------------------------
-    glEnable(GL_DEPTH_TEST);
-    // render loop
-    // -----------
-    while (!glfwWindowShouldClose(window))
-    {
-        // per-frame time logic
-        // --------------------
-        float currentFrame = glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-
-        // input
-        // -----
-        processInput(window);
-
-        // render
-        // ------
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // be sure to activate shader when setting uniforms/drawing objects
-        lightingShader.use();
-        lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
-        lightingShader.setVec3("lightPos", lightPos);
-
-        // view/projection transformations
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
-        glm::mat4 view = camera.GetViewMatrix();
-        lightingShader.setMat4("projection", projection);
-        lightingShader.setMat4("view", view);
-
-        // world transformation
-
-        float gap = 2.5f;
-
-        int index = 0;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                drawCube(res, glm::vec3{x * gap, y * gap, 0.0f}, colors[index]);
-                index ++;
-            }
-        }
-
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    // optional: de-allocate all resources once they've outlived their purpose:
-    // ------------------------------------------------------------------------
-    glDeleteVertexArrays(1, &cubeVAO);
-    glDeleteBuffers(1, &VBO);
-
-    // glfw: terminate, clearing all previously allocated GLFW resources.
-    // ------------------------------------------------------------------
-    glfwTerminate();*/
     return 0;
 }
-/*
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
-{
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    else if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
-}
-
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-// ---------------------------------------------------------------------------------------------
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    // make sure the viewport matches the new window dimensions; note that width and 
-    // height will be significantly larger than specified on retina displays.
-    glViewport(0, 0, width, height);
-}
-
-
-// glfw: whenever the mouse moves, this callback is called
-// -------------------------------------------------------
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-
-    lastX = xpos;
-    lastY = ypos;
-
-    camera.ProcessMouseMovement(xoffset, yoffset);
-}
-
-// glfw: whenever the mouse scroll wheel scrolls, this callback is called
-// ----------------------------------------------------------------------
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    camera.ProcessMouseScroll(yoffset);
-}*/
