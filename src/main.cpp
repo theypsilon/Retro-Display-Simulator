@@ -1,6 +1,6 @@
 #include <glad/glad.h>
 
-#include <SDL2/SDL.h>
+#include <SDL.h>
 
 #include <stb_image.h>
 
@@ -42,7 +42,7 @@ struct Resources {
     std::vector<glm::vec3> colors;
     unsigned int VBO;
     unsigned int cubeVAO;
-    unsigned int width, height;
+    int width, height;
     int last_mouse_x, last_mouse_y;
     float cur_voxel_gap;
     float min_voxel_gap;
@@ -81,8 +81,8 @@ void drawCube(Resources& res, glm::vec3 pos, glm::vec3 color) {
 
 Resources load_resources() {
     int width, height, nrChannels;
-    unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/snes3.png").c_str(), &width, &height, &nrChannels, 0);
-    std::vector<glm::vec3> colors{width * height};
+    unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/megaman.png").c_str(), &width, &height, &nrChannels, 0);
+    std::vector<glm::vec3> colors{(unsigned int) width * height};
     for (int i = 0; i < width * height; i++) {
         colors.push_back(glm::vec3{0.0f, 0.0f, 0.0f});
     }
@@ -284,7 +284,7 @@ void update(const Input& input, Resources& res) {
     res.ticks++;
 }
 
-int main()
+int main(int argc, char* argv[])
 {
 // Initialize SDL's Video subsystem
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -310,7 +310,7 @@ int main()
         SDL_WINDOWPOS_CENTERED,
         SCR_WIDTH,
         SCR_HEIGHT,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN
+        SDL_WINDOW_OPENGL //| SDL_WINDOW_FULLSCREEN
     );
 
     if (main_window == nullptr) {
