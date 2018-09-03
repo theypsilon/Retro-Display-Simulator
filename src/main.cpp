@@ -1,3 +1,5 @@
+﻿#include <cstdio>
+
 #include <glad/glad.h>
 
 #include <SDL.h>
@@ -16,9 +18,15 @@
 #include <vector>
 #include <iostream>
 
+extern "C"
+{
+	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
 // settings
-const unsigned int SCR_WIDTH = 1920 * 2;
-const unsigned int SCR_HEIGHT = 1080 * 2;
+const unsigned int SCR_WIDTH = 1920;
+const unsigned int SCR_HEIGHT = 1080;
 
 // camera
 float lastX = SCR_WIDTH / 2.0f;
@@ -310,6 +318,7 @@ int main(int argc, char* argv[])
         SDL_WINDOWPOS_CENTERED,
         SCR_WIDTH,
         SCR_HEIGHT,
+		//SDL_WINDOW_FULLSCREEN |
         SDL_WINDOW_OPENGL //| SDL_WINDOW_FULLSCREEN
     );
 
@@ -329,6 +338,22 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+	/*SDL_Renderer *renderer = SDL_CreateRenderer(main_window, -1, 0);
+	SDL_RendererInfo renderer_info;
+	SDL_GetRendererInfo(renderer, &renderer_info);
+
+	std::cout << "vendor: " << SDL_GetCurrentVideoDriver << "\nrenderer" << renderer_info.name << std::endl;
+	*/
+	/* we can now get data for the specific OpenGL instance we created */
+	GLint major, minor;
+	glGetIntegerv(GL_MAJOR_VERSION, &major);
+	glGetIntegerv(GL_MINOR_VERSION, &minor);
+	printf("GL Vendor : %s\n", glGetString(GL_VENDOR));
+	printf("GL Renderer : %s\n", glGetString(GL_RENDERER));
+	printf("GL Version (string) : %s\n", glGetString(GL_VERSION));
+	printf("GL Version (integer) : %d.%d\n", major, minor);
+	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+
     if (SDL_GL_SetSwapInterval(1) < 0) {
         std::cerr << "Failed to set swap interval\n";
         return -1;
@@ -339,26 +364,9 @@ int main(int argc, char* argv[])
     Input input;
     Resources res = load_resources();
 
-    const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
-
     bool loop = true;
     while (loop)
     {
-
-        if (kbstate[SDL_SCANCODE_A]) { input.walk_left = true; } else { input.walk_left = false; }
-        if (kbstate[SDL_SCANCODE_D]) { input.walk_right = true; } else { input.walk_right = false; }
-        if (kbstate[SDL_SCANCODE_W]) { input.walk_forward = true; } else { input.walk_forward = false; }
-        if (kbstate[SDL_SCANCODE_S]) { input.walk_backward = true; } else { input.walk_backward = false; }
-        if (kbstate[SDL_SCANCODE_Q]) { input.walk_up = true; } else { input.walk_up = false; }
-        if (kbstate[SDL_SCANCODE_E]) { input.walk_down = true; } else { input.walk_down = false; }
-        if (kbstate[SDL_SCANCODE_J]) { input.spread_voxels = true; } else { input.spread_voxels = false; }
-        if (kbstate[SDL_SCANCODE_K]) { input.collapse_voxels = true; } else { input.collapse_voxels = false; }
-        if (kbstate[SDL_SCANCODE_F]) { input.speed_up = true; } else { input.speed_up = false; }
-        if (kbstate[SDL_SCANCODE_R]) { input.speed_down = true; } else { input.speed_down = false; }
-        if (kbstate[SDL_SCANCODE_UP]) { input.look_left = true; } else { input.look_left = false; }
-        if (kbstate[SDL_SCANCODE_DOWN]) { input.look_right = true; } else { input.look_right = false; }
-        if (kbstate[SDL_SCANCODE_LEFT]) { input.look_up = true; } else { input.look_up = false; }
-        if (kbstate[SDL_SCANCODE_RIGHT]) { input.look_down = true; } else { input.look_down = false; }
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -370,6 +378,16 @@ int main(int argc, char* argv[])
                         case SDLK_ESCAPE:
                             loop = false;
                             break;
+						case SDLK_a: input.walk_left = true; break;
+						case SDLK_d: input.walk_right = true; break;
+						case SDLK_w: input.walk_forward = true; break;
+						case SDLK_s: input.walk_backward = true; break;
+						case SDLK_q: input.walk_up = true; break;
+						case SDLK_e: input.walk_down = true; break;
+						case SDLK_UP: input.look_left = true; break;
+						case SDLK_DOWN: input.look_right = true; break;
+						case SDLK_LEFT: input.look_up = true; break;
+						case SDLK_RIGHT: input.look_down = true; break;
                     }
                     break;
                 case SDL_MOUSEBUTTONDOWN:
@@ -395,6 +413,22 @@ int main(int argc, char* argv[])
                     break;
             }
         }
+
+		const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+		if (kbstate[SDL_SCANCODE_A    ] == false && input.walk_left       == true) { input.walk_left       = false; }
+		if (kbstate[SDL_SCANCODE_D    ] == false && input.walk_right      == true) { input.walk_right      = false; }
+		if (kbstate[SDL_SCANCODE_W    ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
+		if (kbstate[SDL_SCANCODE_S    ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
+		if (kbstate[SDL_SCANCODE_Q    ] == false && input.walk_up         == true) { input.walk_up         = false; }
+		if (kbstate[SDL_SCANCODE_E    ] == false && input.walk_down       == true) { input.walk_down       = false; }
+		if (kbstate[SDL_SCANCODE_J    ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
+		if (kbstate[SDL_SCANCODE_K    ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
+		if (kbstate[SDL_SCANCODE_F    ] == false && input.speed_up        == true) { input.speed_up        = false; }
+		if (kbstate[SDL_SCANCODE_R    ] == false && input.speed_down      == true) { input.speed_down      = false; }
+		if (kbstate[SDL_SCANCODE_UP   ] == false && input.look_left       == true) { input.look_left       = false; }
+		if (kbstate[SDL_SCANCODE_DOWN ] == false && input.look_right      == true) { input.look_right      = false; }
+		if (kbstate[SDL_SCANCODE_LEFT ] == false && input.look_up         == true) { input.look_up         = false; }
+		if (kbstate[SDL_SCANCODE_RIGHT] == false && input.look_down       == true) { input.look_down       = false; }
 
         update(input, res);
 
