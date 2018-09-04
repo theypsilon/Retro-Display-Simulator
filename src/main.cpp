@@ -1,7 +1,4 @@
-﻿#include <cstdio>
-#include <chrono>
-
-#include <glad/glad.h>
+﻿#include <glad/glad.h>
 
 #include <SDL.h>
 
@@ -18,6 +15,8 @@
 
 #include <vector>
 #include <iostream>
+#include <cstdio>
+#include <chrono>
 
 #ifdef WIN32
 extern "C"
@@ -248,7 +247,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
     unsigned char *data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
     std::cout << "Will load instances: " << (width * height) << ", Size: " << (width * height * 16) << std::endl;
-    glm::vec4 colors[width * height];
+    std::vector<glm::vec4> colors(width * height);
     if (data)
     {
         std::cout << "width: " << width << ", height: " << height << ", nrChannels: " << nrChannels << std::endl;
@@ -275,7 +274,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     float half_width = float(width) / 2.0f * gap * 1.16666f;
     float half_height = float(height) / 2.0f * gap;
 
-    glm::vec2 offsets[width * height];
+    std::vector<glm::vec2> offsets(width * height);
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
             float x = i * gap * 1.16666f - half_width;
