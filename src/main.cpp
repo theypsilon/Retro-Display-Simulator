@@ -1,4 +1,5 @@
 ﻿#include <cstdio>
+#include <chrono>
 
 #include <glad/glad.h>
 
@@ -32,7 +33,6 @@ struct Resources {
     Uint32 last_time;
     Shader lightingShader;
     Camera camera;
-    std::vector<glm::vec4> colors;
     unsigned int cubeVAO;
     int width, height;
     int last_mouse_x, last_mouse_y;
@@ -68,7 +68,7 @@ unsigned int SCR_WIDTH = 640;
 unsigned int SCR_HEIGHT = 480;
 
 Resources load_resources(SDL_Window* window, const std::string& path);
-void update(const Input& input, Resources& res);
+void update(const Input& input, Resources& res, float delta_time);
 
 int main(int argc, char* argv[]) {
 
@@ -148,8 +148,14 @@ int main(int argc, char* argv[]) {
     Resources res = load_resources(main_window, path);
 
     bool loop = true;
+    float delta_time = 0.0f;
+    auto last_time = std::chrono::system_clock::now();
     while (loop)
     {
+        auto current_time = std::chrono::system_clock::now();
+        delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
+        last_time = current_time;
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -224,7 +230,7 @@ int main(int argc, char* argv[]) {
             input.f11 = true;
         }
 
-        update(input, res);
+        update(input, res, delta_time);
 
         if (input.f11) { input.f11 = false; }
         if (input.speed_down) { input.speed_down = false; }
@@ -241,10 +247,8 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
     unsigned char *data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
-    std::vector<glm::vec4> colors{(unsigned int) width * height};
-    for (int i = 0; i < width * height; i++) {
-        colors.push_back(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-    }
+    std::cout << "Will load instances: " << (width * height) << ", Size: " << (width * height * 16) << std::endl;
+    glm::vec4 colors[width * height];
     if (data)
     {
         std::cout << "width: " << width << ", height: " << height << ", nrChannels: " << nrChannels << std::endl;
@@ -265,21 +269,18 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     {
         std::cout << "Failed to load texture" << std::endl;
     }
-    std::cout << "Colors OK" << std::endl;
+    stbi_image_free(data);
 
     float gap = 1.0f;
     float half_width = float(width) / 2.0f * gap * 1.16666f;
     float half_height = float(height) / 2.0f * gap;
 
-    glm::mat4 model_matrices[width * height];
+    glm::vec2 offsets[width * height];
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
             float x = i * gap * 1.16666f - half_width;
             float y = j * gap - half_height;
-            float z = 0.0f;
-            glm::mat4 model;
-            model = glm::translate(model, glm::vec3(x, y, z));
-            model_matrices[j * width + i] = model;
+            offsets[j * width + i] = glm::vec2(x, y);
         }
     }
 
@@ -355,39 +356,26 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glVertexAttribDivisor(2, 1);
 
 
-    unsigned int instanceVBO;
-    glGenBuffers(1, &instanceVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * width * height, &model_matrices[0], GL_STATIC_DRAW);
+    unsigned int offsetsVBO;
+    glGenBuffers(1, &offsetsVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, offsetsVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * width * height, &offsets[0], GL_STATIC_DRAW);
 
-        // set attribute pointers for matrix (4 times vec4)
     glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)0);
-    glEnableVertexAttribArray(4);
-    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4)));
-    glEnableVertexAttribArray(5);
-    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(2 * sizeof(glm::vec4)));
-    glEnableVertexAttribArray(6);
-    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(3 * sizeof(glm::vec4)));
-
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
     glVertexAttribDivisor(3, 1);
-    glVertexAttribDivisor(4, 1);
-    glVertexAttribDivisor(5, 1);
-    glVertexAttribDivisor(6, 1);
 
     glBindVertexArray(0);
 
     // be sure to activate shader when setting uniforms/drawing objects
     Shader lightingShader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"};
     Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
-    stbi_image_free(data);
     return Resources {
         window,
         0,
         0,
         std::move(lightingShader),
         std::move(camera),
-        std::move(colors),
         VAO,
         width,
         height,
@@ -399,7 +387,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     };
 }
 
-void update(const Input& input, Resources& res) {
+void update(const Input& input, Resources& res, float delta_time) {
     if (input.f11) {
         auto flag = res.full_screen ? 0 : SDL_WINDOW_FULLSCREEN;
         SDL_SetWindowFullscreen(res.window, flag);
@@ -416,7 +404,6 @@ void update(const Input& input, Resources& res) {
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    float deltaTime = 1.0f / 30.0f;
 
     if (input.speed_up)
         res.camera.MovementSpeed *= 1.5f;
@@ -429,24 +416,24 @@ void update(const Input& input, Resources& res) {
         res.camera.MovementSpeed = 0.1f;
 
     if (input.spread_voxels)
-        res.cur_voxel_gap += 0.5f * deltaTime;
+        res.cur_voxel_gap += 0.05f * delta_time * res.camera.MovementSpeed;
     if (input.collapse_voxels)
-        res.cur_voxel_gap -= 0.5f * deltaTime;
+        res.cur_voxel_gap -= 0.05f * delta_time * res.camera.MovementSpeed;
     if (res.cur_voxel_gap <= res.min_voxel_gap)
         res.cur_voxel_gap = res.min_voxel_gap;
 
     if (input.walk_up)
-        res.camera.ProcessKeyboard(UP, deltaTime);
+        res.camera.ProcessKeyboard(UP, delta_time);
     if (input.walk_down)
-        res.camera.ProcessKeyboard(DOWN, deltaTime);
+        res.camera.ProcessKeyboard(DOWN, delta_time);
     if (input.walk_forward)
-        res.camera.ProcessKeyboard(FORWARD, deltaTime);
+        res.camera.ProcessKeyboard(FORWARD, delta_time);
     if (input.walk_backward)
-        res.camera.ProcessKeyboard(BACKWARD, deltaTime);
+        res.camera.ProcessKeyboard(BACKWARD, delta_time);
     if (input.walk_left)
-        res.camera.ProcessKeyboard(LEFT, deltaTime);
+        res.camera.ProcessKeyboard(LEFT, delta_time);
     if (input.walk_right)
-        res.camera.ProcessKeyboard(RIGHT, deltaTime);
+        res.camera.ProcessKeyboard(RIGHT, delta_time);
 
     if (input.mouse_click_left) {
         if (res.last_mouse_x < 0) {
