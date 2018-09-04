@@ -50,7 +50,7 @@ struct Resources {
     Uint32 last_time;
     Shader lightingShader;
     Camera camera;
-    std::vector<glm::vec3> colors;
+    std::vector<glm::vec4> colors;
     unsigned int VBO;
     unsigned int cubeVAO;
     int width, height;
@@ -83,7 +83,8 @@ struct Input {
     int mouse_motion_y = -1;
 };
 
-void drawCube(Resources& res, glm::vec3 pos, glm::vec3 color) {
+void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color) {
+    if (color.a == 0.0f) return;
     auto model = glm::mat4();
     model = glm::translate(model, pos);
     res.lightingShader.setMat4("model", model);
@@ -97,9 +98,9 @@ void drawCube(Resources& res, glm::vec3 pos, glm::vec3 color) {
 Resources load_resources(SDL_Window* window) {
     int width, height, nrChannels;
     unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/megaman.png").c_str(), &width, &height, &nrChannels, 0);
-    std::vector<glm::vec3> colors{(unsigned int) width * height};
+    std::vector<glm::vec4> colors{(unsigned int) width * height};
     for (int i = 0; i < width * height; i++) {
-        colors.push_back(glm::vec3{0.0f, 0.0f, 0.0f});
+        colors.push_back(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
     }
     if (data)
     {
@@ -107,15 +108,12 @@ Resources load_resources(SDL_Window* window) {
         int index = 0;
         for (int j = height - 1; j >= 0; j--) {
             for (int i = 0; i < width; i++) {
-                if (nrChannels == 4 && data[index + 3] == 0) {
-                    colors[j * width + i] = glm::vec3{0.5f, 0.5f, 0.5f};
-                } else {
-                    colors[j * width + i] = glm::vec3{
-                        ((float) data[index + 0]) / 255.0f, 
-                        ((float) data[index + 1]) / 255.0f,
-                        ((float) data[index + 2]) / 255.0f
-                    };
-                }
+                colors[j * width + i] = glm::vec4{
+                    ((float) data[index + 0]) / 255.0f, 
+                    ((float) data[index + 1]) / 255.0f,
+                    ((float) data[index + 2]) / 255.0f,
+                    ((float) data[index + 3]) / 255.0f
+                };
                 index += nrChannels;
             }
         }
