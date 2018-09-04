@@ -97,7 +97,7 @@ void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color) {
 
 Resources load_resources(SDL_Window* window) {
     int width, height, nrChannels;
-    unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/megaman.png").c_str(), &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/snes3.png").c_str(), &width, &height, &nrChannels, 0);
     std::vector<glm::vec4> colors{(unsigned int) width * height};
     for (int i = 0; i < width * height; i++) {
         colors.push_back(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
@@ -221,15 +221,15 @@ void update(const Input& input, Resources& res) {
         res.last_time = now;
         res.ticks = 0;
     }
-    glClearColor(0.55f, 0.55f, 0.55f, 1.0f);
+    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float deltaTime = 1.0f / 30.0f;
 
     if (input.speed_up)
-        res.camera.MovementSpeed *= 1.05f;
+        res.camera.MovementSpeed *= 1.5f;
     if (input.speed_down)
-        res.camera.MovementSpeed /= 1.05f;
+        res.camera.MovementSpeed /= 1.5f;
 
     if (res.camera.MovementSpeed > 10000)
         res.camera.MovementSpeed = 10000;
@@ -395,6 +395,10 @@ int main(int argc, char* argv[])
 						case SDLK_s: input.walk_backward = true; break;
 						case SDLK_q: input.walk_up = true; break;
 						case SDLK_e: input.walk_down = true; break;
+                        case SDLK_r: input.speed_down = true; break;
+                        case SDLK_f: input.speed_up = true; break;
+                        case SDLK_j: input.spread_voxels = true; break;
+                        case SDLK_k: input.collapse_voxels = true; break;
 						case SDLK_UP: input.walk_forward = true; break;
 						case SDLK_DOWN: input.walk_backward = true; break;
 						case SDLK_LEFT: input.walk_left = true; break;
@@ -451,6 +455,9 @@ int main(int argc, char* argv[])
         update(input, res);
 
         if (input.f11) { input.f11 = false; }
+        if (input.speed_down) { input.speed_down = false; }
+        if (input.speed_up) { input.speed_up = false; }
+
         SDL_GL_SwapWindow(main_window); 
     }
 
