@@ -11,4 +11,4 @@ make
 
 popd
 
-./build/retro-drawer
+./build/retro-drawer $@

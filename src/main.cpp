@@ -95,9 +95,9 @@ void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color) {
     glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
-Resources load_resources(SDL_Window* window) {
+Resources load_resources(SDL_Window* window, const std::string& path) {
     int width, height, nrChannels;
-    unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/snes3.png").c_str(), &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
     std::vector<glm::vec4> colors{(unsigned int) width * height};
     for (int i = 0; i < width * height; i++) {
         colors.push_back(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
@@ -306,6 +306,7 @@ void update(const Input& input, Resources& res) {
 
 int main(int argc, char* argv[])
 {
+    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/megaman.png");
 // Initialize SDL's Video subsystem
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
     {
@@ -373,7 +374,7 @@ int main(int argc, char* argv[])
     glEnable(GL_DEPTH_TEST);
 
     Input input;
-    Resources res = load_resources(main_window);
+    Resources res = load_resources(main_window, path);
 
     bool loop = true;
     while (loop)
