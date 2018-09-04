@@ -33,7 +33,6 @@ struct Resources {
     Shader lightingShader;
     Camera camera;
     std::vector<glm::vec4> colors;
-    unsigned int VBO;
     unsigned int cubeVAO;
     int width, height;
     int last_mouse_x, last_mouse_y;
@@ -70,7 +69,6 @@ unsigned int SCR_HEIGHT = 480;
 
 Resources load_resources(SDL_Window* window, const std::string& path);
 void update(const Input& input, Resources& res);
-void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color);
 
 int main(int argc, char* argv[]) {
 
@@ -241,6 +239,7 @@ int main(int argc, char* argv[]) {
 
 Resources load_resources(SDL_Window* window, const std::string& path) {
     int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
     unsigned char *data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
     std::vector<glm::vec4> colors{(unsigned int) width * height};
     for (int i = 0; i < width * height; i++) {
@@ -250,7 +249,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     {
         std::cout << "width: " << width << ", height: " << height << ", nrChannels: " << nrChannels << std::endl;
         int index = 0;
-        for (int j = height - 1; j >= 0; j--) {
+        for (int j = 0; j < height; j++) {
             for (int i = 0; i < width; i++) {
                 colors[j * width + i] = glm::vec4{
                     ((float) data[index + 0]) / 255.0f, 
@@ -266,8 +265,23 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     {
         std::cout << "Failed to load texture" << std::endl;
     }
-    stbi_image_free(data);
     std::cout << "Colors OK" << std::endl;
+
+    float gap = 1.0f;
+    float half_width = float(width) / 2.0f * gap * 1.16666f;
+    float half_height = float(height) / 2.0f * gap;
+
+    glm::mat4 model_matrices[width * height];
+    for (int j = 0; j < height; j++) {
+        for (int i = 0; i < width; i++) {
+            float x = i * gap * 1.16666f - half_width;
+            float y = j * gap - half_height;
+            float z = 0.0f;
+            glm::mat4 model;
+            model = glm::translate(model, glm::vec3(x, y, z));
+            model_matrices[j * width + i] = model;
+        }
+    }
 
     float vertices[] = {
         -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -312,16 +326,15 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         -0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
         -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
-    // first, configure the cube's VAO (and VBO)
-    unsigned int VBO;
-    glGenBuffers(1, &VBO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    unsigned int VAO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    unsigned int geometryVBO;
+    glGenBuffers(1, &geometryVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, geometryVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    unsigned int cubeVAO;
-    glGenVertexArrays(1, &cubeVAO);
-    glBindVertexArray(cubeVAO);
 
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
@@ -330,17 +343,52 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
 
+    unsigned int colorsVBO;
+    glGenBuffers(1, &colorsVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, colorsVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * width * height, &colors[0], GL_STATIC_DRAW);
+
+        // set attribute pointers for matrix (4 times vec4)
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
+    glVertexAttribDivisor(2, 1);
+
+
+    unsigned int instanceVBO;
+    glGenBuffers(1, &instanceVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * width * height, &model_matrices[0], GL_STATIC_DRAW);
+
+        // set attribute pointers for matrix (4 times vec4)
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)0);
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4)));
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(2 * sizeof(glm::vec4)));
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(3 * sizeof(glm::vec4)));
+
+    glVertexAttribDivisor(3, 1);
+    glVertexAttribDivisor(4, 1);
+    glVertexAttribDivisor(5, 1);
+    glVertexAttribDivisor(6, 1);
+
+    glBindVertexArray(0);
+
+    // be sure to activate shader when setting uniforms/drawing objects
+    Shader lightingShader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"};
+    Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
+    stbi_image_free(data);
     return Resources {
         window,
         0,
         0,
-        Shader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"},
+        std::move(lightingShader),
         std::move(camera),
         std::move(colors),
-        VBO,
-        cubeVAO,
+        VAO,
         width,
         height,
         -1,
@@ -420,42 +468,29 @@ void update(const Input& input, Resources& res) {
     auto width = res.width;
     auto height = res.height;
 
-    float gap = res.cur_voxel_gap;
+    float gap_value = res.cur_voxel_gap;
+    float gap_matrix_values[16] = {
+        gap_value,  0,  0,  0,
+        0,  gap_value,  0,  0,
+        0,  0,  gap_value,  0,
+        0,  0,  0,  gap_value
+    };
 
-    float half_width = width / 2 * gap * 1.16666f;
-    float half_height = height / 2 * gap;
-        // be sure to activate shader when setting uniforms/drawing objects
-    res.lightingShader.use();
-    res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
-    res.lightingShader.setVec3("lightPos", glm::vec3{half_width, half_height, 400.0f});
-
+    glm::mat4 gap_4x4 = glm::make_mat4(gap_matrix_values);
     // view/projection transformations
     glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
+
+    res.lightingShader.use();
+    res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
+    res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
     res.lightingShader.setMat4("projection", projection);
     res.lightingShader.setMat4("view", view);
+    res.lightingShader.setFloat("gap", gap_value);
 
     // world transformation
-
-    int index = 0;
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            drawCube(res, glm::vec3{(float) x * gap * 1.16666f - half_width, (float) y * gap - half_height, 0.0f}, res.colors[index]);
-            index ++;
-        }
-    }
+    glBindVertexArray(res.cubeVAO);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.width * res.height);
 
     res.ticks++;
-}
-
-void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color) {
-    if (color.a == 0.0f) return;
-    auto model = glm::mat4();
-    model = glm::translate(model, pos);
-    res.lightingShader.setMat4("model", model);
-    res.lightingShader.setVec3("objectColor", color.x, color.y, color.z);
-
-    // render the second cube
-    glBindVertexArray(res.cubeVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
 }

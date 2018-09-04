@@ -3,13 +3,17 @@ out vec4 FragColor;
 
 in vec3 Normal;  
 in vec3 FragPos;  
-  
+in vec4 VColor;
+
 uniform vec3 lightPos; 
 uniform vec3 lightColor;
-uniform vec3 objectColor;
 
 void main()
 {
+    if (VColor.a == 0.0) {
+        discard;
+    }
+    
     // ambient
     float ambientStrength = 0.5f;
     vec3 ambient = ambientStrength * lightColor;
@@ -20,6 +24,5 @@ void main()
     float diff = max(dot(norm, lightDir), 0.0);
     vec3 diffuse = diff * lightColor;
             
-    vec3 result = (ambient + diffuse * 0.5) * objectColor;
-    FragColor = vec4(result, 1.0);
+    FragColor = vec4(ambient + diffuse * 0.5, 1.0) * VColor;
 } 
