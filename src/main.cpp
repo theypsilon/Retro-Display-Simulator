@@ -26,24 +26,6 @@ extern "C"
 }
 #endif
 
-// settings
-const unsigned int SCR_WIDTH = 1920;
-const unsigned int SCR_HEIGHT = 1080;
-
-// camera
-float lastX = SCR_WIDTH / 2.0f;
-float lastY = SCR_HEIGHT / 2.0f;
-bool firstMouse = true;
-
-// timing
-float deltaTime = 0.0f; 
-float lastFrame = 0.0f;
-
-// lighting
-glm::vec3 lightPos(0.0f, 0.0f, 2.0f);
-glm::vec3 secondPos(0.0f, 1.25f, 0.0f);
-glm::vec3 thirdPos(0.0f, 2.5f, 0.0f);
-
 struct Resources {
     SDL_Window* window;
     unsigned int ticks;
@@ -83,17 +65,179 @@ struct Input {
     int mouse_motion_y = -1;
 };
 
-void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color) {
-    if (color.a == 0.0f) return;
-    auto model = glm::mat4();
-    model = glm::translate(model, pos);
-    res.lightingShader.setMat4("model", model);
-    res.lightingShader.setVec3("objectColor", color.x, color.y, color.z);
+unsigned int SCR_WIDTH = 640;
+unsigned int SCR_HEIGHT = 480;
 
-    // render the second cube
-    glBindVertexArray(res.cubeVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
+Resources load_resources(SDL_Window* window, const std::string& path);
+void update(const Input& input, Resources& res);
+void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color);
+
+int main(int argc, char* argv[]) {
+
+    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/megaman.png");
+// Initialize SDL's Video subsystem
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        std::cerr << "Failed to init SDL\n";
+        return -1;
+    }
+
+    atexit (SDL_Quit);
+
+    SDL_DisplayMode display_mode;
+    if (SDL_GetDesktopDisplayMode(0, &display_mode) == 0) {
+        SCR_WIDTH = display_mode.w;
+        SCR_HEIGHT = display_mode.h;
+    }
+
+    // Request an OpenGL 4.5 context (should be core)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    // Also request a depth buffer
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+    auto main_window = SDL_CreateWindow(
+        "Retro Drawer", 
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        SCR_WIDTH,
+        SCR_HEIGHT,
+        SDL_WINDOW_OPENGL
+    );
+
+    if (main_window == nullptr) {
+        std::cerr << "Failed to create SDL Window\n";
+        return -1;
+    }
+
+    auto glContext = SDL_GL_CreateContext(main_window);
+    if (glContext == nullptr) {
+        std::cerr << "Failed to create OpenGL Context\n";
+        return -1;
+    }
+
+    if (gladLoadGLLoader(SDL_GL_GetProcAddress) < 0) {
+        std::cerr << "Failed to load OpenGL\n";
+        return -1;
+    }
+
+    /*SDL_Renderer *renderer = SDL_CreateRenderer(main_window, -1, 0);
+    SDL_RendererInfo renderer_info;
+    SDL_GetRendererInfo(renderer, &renderer_info);
+
+    std::cout << "vendor: " << SDL_GetCurrentVideoDriver << "\nrenderer" << renderer_info.name << std::endl;
+    */
+    /* we can now get data for the specific OpenGL instance we created */
+    GLint major, minor;
+    glGetIntegerv(GL_MAJOR_VERSION, &major);
+    glGetIntegerv(GL_MINOR_VERSION, &minor);
+    printf("GL Vendor : %s\n", glGetString(GL_VENDOR));
+    printf("GL Renderer : %s\n", glGetString(GL_RENDERER));
+    printf("GL Version (string) : %s\n", glGetString(GL_VERSION));
+    printf("GL Version (integer) : %d.%d\n", major, minor);
+    printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+    if (SDL_GL_SetSwapInterval(1) < 0) {
+        std::cerr << "Failed to set swap interval\n";
+        return -1;
+    }
+
+    glEnable(GL_DEPTH_TEST);
+
+    Input input;
+    Resources res = load_resources(main_window, path);
+
+    bool loop = true;
+    while (loop)
+    {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+                case SDL_QUIT:
+                    loop = false;
+                    break;
+                case SDL_KEYDOWN:
+                    switch (event.key.keysym.sym) {
+                        case SDLK_ESCAPE:
+                            loop = false;
+                            break;
+                        case SDLK_a: input.walk_left = true; break;
+                        case SDLK_d: input.walk_right = true; break;
+                        case SDLK_w: input.walk_forward = true; break;
+                        case SDLK_s: input.walk_backward = true; break;
+                        case SDLK_q: input.walk_up = true; break;
+                        case SDLK_e: input.walk_down = true; break;
+                        case SDLK_r: input.speed_down = true; break;
+                        case SDLK_f: input.speed_up = true; break;
+                        case SDLK_j: input.spread_voxels = true; break;
+                        case SDLK_k: input.collapse_voxels = true; break;
+                        case SDLK_UP: input.walk_forward = true; break;
+                        case SDLK_DOWN: input.walk_backward = true; break;
+                        case SDLK_LEFT: input.walk_left = true; break;
+                        case SDLK_RIGHT: input.walk_right = true; break;
+                        case SDLK_F11: input.f11 = true; break;
+                        case SDLK_LALT: input.alt = true; break;
+                        case SDLK_RETURN: input.enter = true; break;
+                    }
+                    break;
+                case SDL_MOUSEBUTTONDOWN:
+                    switch (event.button.button)
+                    {
+                        case SDL_BUTTON_LEFT: input.mouse_click_left = true; break;
+                    }
+                    break;
+                case SDL_MOUSEBUTTONUP:
+                    switch (event.button.button)
+                    {
+                        case SDL_BUTTON_LEFT: input.mouse_click_left = false; break;
+                    }
+                    break;
+                case SDL_MOUSEMOTION:
+                    if (input.mouse_click_left) {
+                        input.mouse_motion_x = event.motion.x;
+                        input.mouse_motion_y = event.motion.y;
+                    } else {
+                        input.mouse_motion_x = -1;
+                        input.mouse_motion_y = -1;
+                    }
+                    break;
+            }
+        }
+
+        const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+        if (kbstate[SDL_SCANCODE_A     ] == false && kbstate[SDL_SCANCODE_LEFT ] == false && input.walk_left       == true) { input.walk_left       = false; }
+        if (kbstate[SDL_SCANCODE_D     ] == false && kbstate[SDL_SCANCODE_RIGHT] == false && input.walk_right      == true) { input.walk_right      = false; }
+        if (kbstate[SDL_SCANCODE_W     ] == false && kbstate[SDL_SCANCODE_UP   ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
+        if (kbstate[SDL_SCANCODE_S     ] == false && kbstate[SDL_SCANCODE_DOWN ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
+        if (kbstate[SDL_SCANCODE_Q     ] == false && input.walk_up         == true) { input.walk_up         = false; }
+        if (kbstate[SDL_SCANCODE_E     ] == false && input.walk_down       == true) { input.walk_down       = false; }
+        if (kbstate[SDL_SCANCODE_J     ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
+        if (kbstate[SDL_SCANCODE_K     ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
+        if (kbstate[SDL_SCANCODE_F     ] == false && input.speed_up        == true) { input.speed_up        = false; }
+        if (kbstate[SDL_SCANCODE_R     ] == false && input.speed_down      == true) { input.speed_down      = false; }
+        if (kbstate[SDL_SCANCODE_RETURN] == false && input.enter       == true) { input.enter       = false; }
+        if (kbstate[SDL_SCANCODE_LALT  ] == false && input.alt       == true) { input.alt       = false; }
+
+        if (input.alt && input.enter) {
+            input.alt = false;
+            input.enter = false;
+            input.f11 = true;
+        }
+
+        update(input, res);
+
+        if (input.f11) { input.f11 = false; }
+        if (input.speed_down) { input.speed_down = false; }
+        if (input.speed_up) { input.speed_up = false; }
+
+        SDL_GL_SwapWindow(main_window); 
+    }
+
+    return 0;
 }
+
 
 Resources load_resources(SDL_Window* window, const std::string& path) {
     int width, height, nrChannels;
@@ -304,165 +448,14 @@ void update(const Input& input, Resources& res) {
     res.ticks++;
 }
 
-int main(int argc, char* argv[])
-{
-    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/megaman.png");
-// Initialize SDL's Video subsystem
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
-    {
-        std::cerr << "Failed to init SDL\n";
-        return -1;
-    }
+void drawCube(Resources& res, glm::vec3 pos, glm::vec4 color) {
+    if (color.a == 0.0f) return;
+    auto model = glm::mat4();
+    model = glm::translate(model, pos);
+    res.lightingShader.setMat4("model", model);
+    res.lightingShader.setVec3("objectColor", color.x, color.y, color.z);
 
-    atexit (SDL_Quit);
-
-    // Request an OpenGL 4.5 context (should be core)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    // Also request a depth buffer
-    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-
-    auto main_window = SDL_CreateWindow(
-        "Retro Drawer", 
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        SCR_WIDTH,
-        SCR_HEIGHT,
-        SDL_WINDOW_OPENGL
-    );
-
-    if (main_window == nullptr) {
-        std::cerr << "Failed to create SDL Window\n";
-        return -1;
-    }
-
-    auto glContext = SDL_GL_CreateContext(main_window);
-    if (glContext == nullptr) {
-        std::cerr << "Failed to create OpenGL Context\n";
-        return -1;
-    }
-
-    if (gladLoadGLLoader(SDL_GL_GetProcAddress) < 0) {
-        std::cerr << "Failed to load OpenGL\n";
-        return -1;
-    }
-
-	/*SDL_Renderer *renderer = SDL_CreateRenderer(main_window, -1, 0);
-	SDL_RendererInfo renderer_info;
-	SDL_GetRendererInfo(renderer, &renderer_info);
-
-	std::cout << "vendor: " << SDL_GetCurrentVideoDriver << "\nrenderer" << renderer_info.name << std::endl;
-	*/
-	/* we can now get data for the specific OpenGL instance we created */
-	GLint major, minor;
-	glGetIntegerv(GL_MAJOR_VERSION, &major);
-	glGetIntegerv(GL_MINOR_VERSION, &minor);
-	printf("GL Vendor : %s\n", glGetString(GL_VENDOR));
-	printf("GL Renderer : %s\n", glGetString(GL_RENDERER));
-	printf("GL Version (string) : %s\n", glGetString(GL_VERSION));
-	printf("GL Version (integer) : %d.%d\n", major, minor);
-	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
-
-    if (SDL_GL_SetSwapInterval(1) < 0) {
-        std::cerr << "Failed to set swap interval\n";
-        return -1;
-    }
-
-    glEnable(GL_DEPTH_TEST);
-
-    Input input;
-    Resources res = load_resources(main_window, path);
-
-    bool loop = true;
-    while (loop)
-    {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-                case SDL_QUIT:
-                    loop = false;
-                    break;
-                case SDL_KEYDOWN:
-                    switch (event.key.keysym.sym) {
-                        case SDLK_ESCAPE:
-                            loop = false;
-                            break;
-						case SDLK_a: input.walk_left = true; break;
-						case SDLK_d: input.walk_right = true; break;
-						case SDLK_w: input.walk_forward = true; break;
-						case SDLK_s: input.walk_backward = true; break;
-						case SDLK_q: input.walk_up = true; break;
-						case SDLK_e: input.walk_down = true; break;
-                        case SDLK_r: input.speed_down = true; break;
-                        case SDLK_f: input.speed_up = true; break;
-                        case SDLK_j: input.spread_voxels = true; break;
-                        case SDLK_k: input.collapse_voxels = true; break;
-						case SDLK_UP: input.walk_forward = true; break;
-						case SDLK_DOWN: input.walk_backward = true; break;
-						case SDLK_LEFT: input.walk_left = true; break;
-						case SDLK_RIGHT: input.walk_right = true; break;
-                        case SDLK_F11: input.f11 = true; break;
-                        case SDLK_LALT: input.alt = true; break;
-                        case SDLK_RETURN: input.enter = true; break;
-                    }
-                    break;
-                case SDL_MOUSEBUTTONDOWN:
-                    switch (event.button.button)
-                    {
-                        case SDL_BUTTON_LEFT: input.mouse_click_left = true; break;
-                    }
-                    break;
-                case SDL_MOUSEBUTTONUP:
-                    switch (event.button.button)
-                    {
-                        case SDL_BUTTON_LEFT: input.mouse_click_left = false; break;
-                    }
-                    break;
-                case SDL_MOUSEMOTION:
-                    if (input.mouse_click_left) {
-                        input.mouse_motion_x = event.motion.x;
-                        input.mouse_motion_y = event.motion.y;
-                    } else {
-                        input.mouse_motion_x = -1;
-                        input.mouse_motion_y = -1;
-                    }
-                    break;
-            }
-        }
-
-		const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
-		if (kbstate[SDL_SCANCODE_A     ] == false && kbstate[SDL_SCANCODE_LEFT ] == false && input.walk_left       == true) { input.walk_left       = false; }
-		if (kbstate[SDL_SCANCODE_D     ] == false && kbstate[SDL_SCANCODE_RIGHT] == false && input.walk_right      == true) { input.walk_right      = false; }
-		if (kbstate[SDL_SCANCODE_W     ] == false && kbstate[SDL_SCANCODE_UP   ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
-		if (kbstate[SDL_SCANCODE_S     ] == false && kbstate[SDL_SCANCODE_DOWN ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
-		if (kbstate[SDL_SCANCODE_Q     ] == false && input.walk_up         == true) { input.walk_up         = false; }
-		if (kbstate[SDL_SCANCODE_E     ] == false && input.walk_down       == true) { input.walk_down       = false; }
-		if (kbstate[SDL_SCANCODE_J     ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
-		if (kbstate[SDL_SCANCODE_K     ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
-		if (kbstate[SDL_SCANCODE_F     ] == false && input.speed_up        == true) { input.speed_up        = false; }
-		if (kbstate[SDL_SCANCODE_R     ] == false && input.speed_down      == true) { input.speed_down      = false; }
-        if (kbstate[SDL_SCANCODE_RETURN] == false && input.enter       == true) { input.enter       = false; }
-        if (kbstate[SDL_SCANCODE_LALT  ] == false && input.alt       == true) { input.alt       = false; }
-
-        if (input.alt && input.enter) {
-            input.alt = false;
-            input.enter = false;
-            input.f11 = true;
-        }
-
-        update(input, res);
-
-        if (input.f11) { input.f11 = false; }
-        if (input.speed_down) { input.speed_down = false; }
-        if (input.speed_up) { input.speed_up = false; }
-
-        SDL_GL_SwapWindow(main_window); 
-    }
-
-
-    return 0;
-    return 0;
+    // render the second cube
+    glBindVertexArray(res.cubeVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
 }
