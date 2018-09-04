@@ -18,11 +18,13 @@
 #include <vector>
 #include <iostream>
 
+#ifdef WIN32
 extern "C"
 {
 	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
+#endif
 
 // settings
 const unsigned int SCR_WIDTH = 1920;
@@ -43,6 +45,7 @@ glm::vec3 secondPos(0.0f, 1.25f, 0.0f);
 glm::vec3 thirdPos(0.0f, 2.5f, 0.0f);
 
 struct Resources {
+    SDL_Window* window;
     unsigned int ticks;
     Uint32 last_time;
     Shader lightingShader;
@@ -54,6 +57,7 @@ struct Resources {
     int last_mouse_x, last_mouse_y;
     float cur_voxel_gap;
     float min_voxel_gap;
+    bool full_screen;
 };
 
 struct Input {
@@ -70,6 +74,9 @@ struct Input {
     spread_voxels = false,
     collapse_voxels = false,
     mouse_click_left = false,
+    f11 = false,
+    alt = false,
+    enter = false,
     speed_up = false,
     speed_down = false;
     int mouse_motion_x = -1;
@@ -87,7 +94,7 @@ void drawCube(Resources& res, glm::vec3 pos, glm::vec3 color) {
     glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
-Resources load_resources() {
+Resources load_resources(SDL_Window* window) {
     int width, height, nrChannels;
     unsigned char *data = stbi_load(FileSystem::getPath("resources/textures/megaman.png").c_str(), &width, &height, &nrChannels, 0);
     std::vector<glm::vec3> colors{(unsigned int) width * height};
@@ -184,6 +191,7 @@ Resources load_resources() {
     Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
 
     return Resources {
+        window,
         0,
         0,
         Shader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"},
@@ -196,11 +204,17 @@ Resources load_resources() {
         -1,
         -1,
         1.0f,
-        1.0f
+        1.0f,
+        false
     };
 }
 
 void update(const Input& input, Resources& res) {
+    if (input.f11) {
+        auto flag = res.full_screen ? 0 : SDL_WINDOW_FULLSCREEN;
+        SDL_SetWindowFullscreen(res.window, flag);
+        res.full_screen = !res.full_screen;
+    }
 
     auto now = SDL_GetTicks();
     const auto fps_time = 1000;
@@ -318,8 +332,7 @@ int main(int argc, char* argv[])
         SDL_WINDOWPOS_CENTERED,
         SCR_WIDTH,
         SCR_HEIGHT,
-		//SDL_WINDOW_FULLSCREEN |
-        SDL_WINDOW_OPENGL //| SDL_WINDOW_FULLSCREEN
+        SDL_WINDOW_OPENGL
     );
 
     if (main_window == nullptr) {
@@ -362,7 +375,7 @@ int main(int argc, char* argv[])
     glEnable(GL_DEPTH_TEST);
 
     Input input;
-    Resources res = load_resources();
+    Resources res = load_resources(main_window);
 
     bool loop = true;
     while (loop)
@@ -384,10 +397,13 @@ int main(int argc, char* argv[])
 						case SDLK_s: input.walk_backward = true; break;
 						case SDLK_q: input.walk_up = true; break;
 						case SDLK_e: input.walk_down = true; break;
-						case SDLK_UP: input.look_left = true; break;
-						case SDLK_DOWN: input.look_right = true; break;
-						case SDLK_LEFT: input.look_up = true; break;
-						case SDLK_RIGHT: input.look_down = true; break;
+						case SDLK_UP: input.walk_forward = true; break;
+						case SDLK_DOWN: input.walk_backward = true; break;
+						case SDLK_LEFT: input.walk_left = true; break;
+						case SDLK_RIGHT: input.walk_right = true; break;
+                        case SDLK_F11: input.f11 = true; break;
+                        case SDLK_LALT: input.alt = true; break;
+                        case SDLK_RETURN: input.enter = true; break;
                     }
                     break;
                 case SDL_MOUSEBUTTONDOWN:
@@ -415,23 +431,28 @@ int main(int argc, char* argv[])
         }
 
 		const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
-		if (kbstate[SDL_SCANCODE_A    ] == false && input.walk_left       == true) { input.walk_left       = false; }
-		if (kbstate[SDL_SCANCODE_D    ] == false && input.walk_right      == true) { input.walk_right      = false; }
-		if (kbstate[SDL_SCANCODE_W    ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
-		if (kbstate[SDL_SCANCODE_S    ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
-		if (kbstate[SDL_SCANCODE_Q    ] == false && input.walk_up         == true) { input.walk_up         = false; }
-		if (kbstate[SDL_SCANCODE_E    ] == false && input.walk_down       == true) { input.walk_down       = false; }
-		if (kbstate[SDL_SCANCODE_J    ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
-		if (kbstate[SDL_SCANCODE_K    ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
-		if (kbstate[SDL_SCANCODE_F    ] == false && input.speed_up        == true) { input.speed_up        = false; }
-		if (kbstate[SDL_SCANCODE_R    ] == false && input.speed_down      == true) { input.speed_down      = false; }
-		if (kbstate[SDL_SCANCODE_UP   ] == false && input.look_left       == true) { input.look_left       = false; }
-		if (kbstate[SDL_SCANCODE_DOWN ] == false && input.look_right      == true) { input.look_right      = false; }
-		if (kbstate[SDL_SCANCODE_LEFT ] == false && input.look_up         == true) { input.look_up         = false; }
-		if (kbstate[SDL_SCANCODE_RIGHT] == false && input.look_down       == true) { input.look_down       = false; }
+		if (kbstate[SDL_SCANCODE_A     ] == false && kbstate[SDL_SCANCODE_LEFT ] == false && input.walk_left       == true) { input.walk_left       = false; }
+		if (kbstate[SDL_SCANCODE_D     ] == false && kbstate[SDL_SCANCODE_RIGHT] == false && input.walk_right      == true) { input.walk_right      = false; }
+		if (kbstate[SDL_SCANCODE_W     ] == false && kbstate[SDL_SCANCODE_UP   ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
+		if (kbstate[SDL_SCANCODE_S     ] == false && kbstate[SDL_SCANCODE_DOWN ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
+		if (kbstate[SDL_SCANCODE_Q     ] == false && input.walk_up         == true) { input.walk_up         = false; }
+		if (kbstate[SDL_SCANCODE_E     ] == false && input.walk_down       == true) { input.walk_down       = false; }
+		if (kbstate[SDL_SCANCODE_J     ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
+		if (kbstate[SDL_SCANCODE_K     ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
+		if (kbstate[SDL_SCANCODE_F     ] == false && input.speed_up        == true) { input.speed_up        = false; }
+		if (kbstate[SDL_SCANCODE_R     ] == false && input.speed_down      == true) { input.speed_down      = false; }
+        if (kbstate[SDL_SCANCODE_RETURN] == false && input.enter       == true) { input.enter       = false; }
+        if (kbstate[SDL_SCANCODE_LALT  ] == false && input.alt       == true) { input.alt       = false; }
+
+        if (input.alt && input.enter) {
+            input.alt = false;
+            input.enter = false;
+            input.f11 = true;
+        }
 
         update(input, res);
 
+        if (input.f11) { input.f11 = false; }
         SDL_GL_SwapWindow(main_window); 
     }
 
