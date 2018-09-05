@@ -13,9 +13,10 @@
 #include <learnopengl/shader_m.h>
 #include <learnopengl/camera.h>
 
+#include <cstdio>
+#include <cmath>
 #include <vector>
 #include <iostream>
-#include <cstdio>
 #include <chrono>
 
 #ifdef WIN32
@@ -38,6 +39,7 @@ struct Resources {
     float cur_voxel_gap;
     float min_voxel_gap;
     bool full_screen;
+	float wave;
 };
 
 struct Input {
@@ -78,7 +80,7 @@ void reset_input(Input& input);
 
 int main(int argc, char* argv[]) {
 
-    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/megaman.png");
+    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/snes3.png");
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
         return -1;
@@ -309,7 +311,8 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         -1,
         1.0f,
         1.0f,
-        false
+        false,
+		0.0f
     };
 }
 
@@ -327,7 +330,7 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.last_time = now;
         res.ticks = 0;
     }
-    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
@@ -387,12 +390,16 @@ void update(const Input& input, Resources& res, float delta_time) {
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.lightingShader.use();
+	res.lightingShader.setFloat("wave", res.wave * 7);
     res.lightingShader.setFloat("ambientStrength", 0.5f);
     res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
     res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
     res.lightingShader.setMat4("projection", projection);
     res.lightingShader.setMat4("view", view);
     res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
+
+
+	res.wave += delta_time;
 
     // world transformation
     glBindVertexArray(res.cubeVAO);
@@ -410,65 +417,31 @@ void read_input(Input& input, bool& loop) {
                 break;
             case SDL_KEYDOWN:
                 switch (event.key.keysym.sym) {
-                    case SDLK_ESCAPE:
-                        loop = false;
-                        break;
-                    case SDLK_a: input.walk_left = true; break;
-                    case SDLK_d: input.walk_right = true; break;
-                    case SDLK_w: input.walk_forward = true; break;
-                    case SDLK_s: input.walk_backward = true; break;
-                    case SDLK_q: input.walk_up = true; break;
-                    case SDLK_e: input.walk_down = true; break;
-                    case SDLK_r: input.speed_down = true; break;
-                    case SDLK_f: input.speed_up = true; break;
-                    case SDLK_j: input.spread_voxels = true; break;
-                    case SDLK_k: input.collapse_voxels = true; break;
-                    case SDLK_UP: input.walk_forward = true; break;
-                    case SDLK_DOWN: input.walk_backward = true; break;
-                    case SDLK_LEFT: input.walk_left = true; break;
-                    case SDLK_RIGHT: input.walk_right = true; break;
+					case SDLK_ESCAPE: loop = false; break;
                     case SDLK_F11: input.f11 = true; break;
-                    case SDLK_LALT: input.alt = true; break;
-                    case SDLK_RETURN: input.enter = true; break;
-                }
-                break;
-            case SDL_MOUSEBUTTONDOWN:
-                switch (event.button.button)
-                {
-                    case SDL_BUTTON_LEFT: input.mouse_click_left = true; break;
-                }
-                break;
-            case SDL_MOUSEBUTTONUP:
-                switch (event.button.button)
-                {
-                    case SDL_BUTTON_LEFT: input.mouse_click_left = false; break;
-                }
-                break;
-            case SDL_MOUSEMOTION:
-                if (input.mouse_click_left) {
-                    input.mouse_motion_x = event.motion.x;
-                    input.mouse_motion_y = event.motion.y;
-                } else {
-                    input.mouse_motion_x = -1;
-                    input.mouse_motion_y = -1;
+					case SDLK_LALT: input.alt = true; break;
+					case SDLK_RETURN: input.enter = true; break;
+					case SDLK_r: input.speed_down = true; break;
+					case SDLK_f: input.speed_up = true; break;
                 }
                 break;
         }
     }
 
+	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT);
+
     const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
-    if (kbstate[SDL_SCANCODE_A     ] == false && kbstate[SDL_SCANCODE_LEFT ] == false && input.walk_left       == true) { input.walk_left       = false; }
-    if (kbstate[SDL_SCANCODE_D     ] == false && kbstate[SDL_SCANCODE_RIGHT] == false && input.walk_right      == true) { input.walk_right      = false; }
-    if (kbstate[SDL_SCANCODE_W     ] == false && kbstate[SDL_SCANCODE_UP   ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
-    if (kbstate[SDL_SCANCODE_S     ] == false && kbstate[SDL_SCANCODE_DOWN ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
-    if (kbstate[SDL_SCANCODE_Q     ] == false && input.walk_up         == true) { input.walk_up         = false; }
-    if (kbstate[SDL_SCANCODE_E     ] == false && input.walk_down       == true) { input.walk_down       = false; }
-    if (kbstate[SDL_SCANCODE_J     ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
-    if (kbstate[SDL_SCANCODE_K     ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
-    if (kbstate[SDL_SCANCODE_F     ] == false && input.speed_up        == true) { input.speed_up        = false; }
-    if (kbstate[SDL_SCANCODE_R     ] == false && input.speed_down      == true) { input.speed_down      = false; }
-    if (kbstate[SDL_SCANCODE_RETURN] == false && input.enter       == true) { input.enter       = false; }
-    if (kbstate[SDL_SCANCODE_LALT  ] == false && input.alt       == true) { input.alt       = false; }
+    input.walk_left       = kbstate[SDL_SCANCODE_A     ] || kbstate[SDL_SCANCODE_LEFT ];
+    input.walk_right      = kbstate[SDL_SCANCODE_D     ] || kbstate[SDL_SCANCODE_RIGHT];
+    input.walk_forward    = kbstate[SDL_SCANCODE_W     ] || kbstate[SDL_SCANCODE_UP   ];
+    input.walk_backward   = kbstate[SDL_SCANCODE_S     ] || kbstate[SDL_SCANCODE_DOWN ];
+    input.walk_up         = kbstate[SDL_SCANCODE_Q     ];
+    input.walk_down       = kbstate[SDL_SCANCODE_E     ];
+    input.spread_voxels   = kbstate[SDL_SCANCODE_J     ];
+    input.collapse_voxels = kbstate[SDL_SCANCODE_K     ];
+    
+    if (kbstate[SDL_SCANCODE_RETURN] == false) { input.enter = false; }
+    if (kbstate[SDL_SCANCODE_LALT  ] == false) { input.alt   = false; }
 
     if (input.alt && input.enter) {
         input.alt = false;
