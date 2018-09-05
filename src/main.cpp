@@ -96,9 +96,12 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 
-    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+    //SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1); // This is MSAA on/off
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // This is MSAA number of sampling
 
     auto main_window = SDL_CreateWindow(
         "Retro Drawer", 
@@ -139,6 +142,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
+    glEnable(GL_MULTISAMPLE);  
     glEnable(GL_DEPTH_TEST);
 
     Input input;
@@ -391,7 +395,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.lightingShader.use();
-    res.lightingShader.setFloat("ambientStrength", 1.0);
+    res.lightingShader.setFloat("ambientStrength", 0.5f);
     res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
     res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
     res.lightingShader.setMat4("projection", projection);
