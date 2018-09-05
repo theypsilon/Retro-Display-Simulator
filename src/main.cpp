@@ -269,7 +269,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     unsigned int colorsVBO;
     glGenBuffers(1, &colorsVBO);
     glBindBuffer(GL_ARRAY_BUFFER, colorsVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * width * height, &colors[0], GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * width * height, colors.data(), GL_STATIC_DRAW);
 
     // color attribute
     glEnableVertexAttribArray(2);
@@ -280,7 +280,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     unsigned int offsetsVBO;
     glGenBuffers(1, &offsetsVBO);
     glBindBuffer(GL_ARRAY_BUFFER, offsetsVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * width * height, &offsets[0], GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * width * height, offsets.data(), GL_STATIC_DRAW);
 
     // offset attribute
     glEnableVertexAttribArray(3);
