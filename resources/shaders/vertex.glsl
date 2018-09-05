@@ -16,8 +16,8 @@ uniform float wave;
 void main()
 {
 	float radius = length(aOffset);
-	ObjectColor = vec4(1,1,1,1);//aColor;
-    FragPos = aPos + vec3(aOffset * gap, 0) + vec3(0, 0, sin(wave + sin(wave / 10) * radius / 4) * 2 * wave);
+	ObjectColor = aColor;
+    FragPos = aPos + vec3(aOffset * gap, 0) + vec3(0, 0, sin(wave + sin(wave / 10) * radius / 4) * 2);
     Normal = aNormal;  
     
     gl_Position = projection * view * vec4(FragPos, 1.0);

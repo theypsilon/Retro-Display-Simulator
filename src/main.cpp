@@ -68,7 +68,8 @@ struct Input {
 
 const long double ratio_4_3 = 4.0 / 3.0;
 const long double ratio_256_224 = 256.0 / 224.0;
-const long double snes_factor = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
+const long double snes_factor_horizontal = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
+const long double snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
 
 unsigned int SCR_WIDTH = 640;
 unsigned int SCR_HEIGHT = 480;
@@ -198,61 +199,61 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     stbi_image_free(data);
 
     float gap = 1.0f;
-    float half_width = float(width) / 2.0f * gap * snes_factor;
+    float half_width = float(width) / 2.0f * gap * snes_factor_horizontal;
     float half_height = float(height) / 2.0f * gap;
 
     std::vector<glm::vec2> offsets(width * height);
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
-            float x = i * gap * snes_factor - half_width;
+            float x = i * gap * snes_factor_horizontal - half_width;
             float y = j * gap - half_height;
             offsets[j * width + i] = glm::vec2(x, y);
         }
     }
 
     float vertices[] = {
-        // cube coordinates                     cube normals
-        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
-         0.5f * snes_factor, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
-         0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
-         0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
-        -0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
-        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+        // cube coordinates                                           cube normals
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
 
-        -0.5f * snes_factor, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
-         0.5f * snes_factor, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
-         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
-         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
-        -0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
-        -0.5f * snes_factor, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
 
-        -0.5f * snes_factor,  0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor,  0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor, -0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor, -0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor, -0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor,  0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
 
-         0.5f * snes_factor,  0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor,  0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor, -0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor, -0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor, -0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor,  0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
 
-        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
-         0.5f * snes_factor, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
-         0.5f * snes_factor, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
-         0.5f * snes_factor, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
-        -0.5f * snes_factor, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
-        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
+         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
+        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
 
-        -0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
-         0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
-         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
-         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
-        -0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
-        -0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
+         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f
     };
 
     unsigned int VAO;
@@ -330,7 +331,7 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.last_time = now;
         res.ticks = 0;
     }
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
