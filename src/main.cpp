@@ -63,16 +63,22 @@ struct Input {
     int mouse_motion_y = -1;
 };
 
+
+const long double ratio_4_3 = 4.0 / 3.0;
+const long double ratio_256_224 = 256.0 / 224.0;
+const long double snes_factor = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
+
 unsigned int SCR_WIDTH = 640;
 unsigned int SCR_HEIGHT = 480;
 
 Resources load_resources(SDL_Window* window, const std::string& path);
 void update(const Input& input, Resources& res, float delta_time);
+void read_input(Input& input, bool& loop);
+void reset_input(Input& input);
 
 int main(int argc, char* argv[]) {
 
     const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/megaman.png");
-// Initialize SDL's Video subsystem
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
         return -1;
@@ -86,11 +92,10 @@ int main(int argc, char* argv[]) {
         SCR_HEIGHT = display_mode.h;
     }
 
-    // Request an OpenGL 4.5 context (should be core)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    // Also request a depth buffer
+
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -120,13 +125,6 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    /*SDL_Renderer *renderer = SDL_CreateRenderer(main_window, -1, 0);
-    SDL_RendererInfo renderer_info;
-    SDL_GetRendererInfo(renderer, &renderer_info);
-
-    std::cout << "vendor: " << SDL_GetCurrentVideoDriver << "\nrenderer" << renderer_info.name << std::endl;
-    */
-    /* we can now get data for the specific OpenGL instance we created */
     GLint major, minor;
     glGetIntegerv(GL_MAJOR_VERSION, &major);
     glGetIntegerv(GL_MINOR_VERSION, &minor);
@@ -149,91 +147,14 @@ int main(int argc, char* argv[]) {
     bool loop = true;
     float delta_time = 0.0f;
     auto last_time = std::chrono::system_clock::now();
-    while (loop)
-    {
+    while (loop) {
         auto current_time = std::chrono::system_clock::now();
         delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
         last_time = current_time;
 
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-                case SDL_QUIT:
-                    loop = false;
-                    break;
-                case SDL_KEYDOWN:
-                    switch (event.key.keysym.sym) {
-                        case SDLK_ESCAPE:
-                            loop = false;
-                            break;
-                        case SDLK_a: input.walk_left = true; break;
-                        case SDLK_d: input.walk_right = true; break;
-                        case SDLK_w: input.walk_forward = true; break;
-                        case SDLK_s: input.walk_backward = true; break;
-                        case SDLK_q: input.walk_up = true; break;
-                        case SDLK_e: input.walk_down = true; break;
-                        case SDLK_r: input.speed_down = true; break;
-                        case SDLK_f: input.speed_up = true; break;
-                        case SDLK_j: input.spread_voxels = true; break;
-                        case SDLK_k: input.collapse_voxels = true; break;
-                        case SDLK_UP: input.walk_forward = true; break;
-                        case SDLK_DOWN: input.walk_backward = true; break;
-                        case SDLK_LEFT: input.walk_left = true; break;
-                        case SDLK_RIGHT: input.walk_right = true; break;
-                        case SDLK_F11: input.f11 = true; break;
-                        case SDLK_LALT: input.alt = true; break;
-                        case SDLK_RETURN: input.enter = true; break;
-                    }
-                    break;
-                case SDL_MOUSEBUTTONDOWN:
-                    switch (event.button.button)
-                    {
-                        case SDL_BUTTON_LEFT: input.mouse_click_left = true; break;
-                    }
-                    break;
-                case SDL_MOUSEBUTTONUP:
-                    switch (event.button.button)
-                    {
-                        case SDL_BUTTON_LEFT: input.mouse_click_left = false; break;
-                    }
-                    break;
-                case SDL_MOUSEMOTION:
-                    if (input.mouse_click_left) {
-                        input.mouse_motion_x = event.motion.x;
-                        input.mouse_motion_y = event.motion.y;
-                    } else {
-                        input.mouse_motion_x = -1;
-                        input.mouse_motion_y = -1;
-                    }
-                    break;
-            }
-        }
-
-        const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
-        if (kbstate[SDL_SCANCODE_A     ] == false && kbstate[SDL_SCANCODE_LEFT ] == false && input.walk_left       == true) { input.walk_left       = false; }
-        if (kbstate[SDL_SCANCODE_D     ] == false && kbstate[SDL_SCANCODE_RIGHT] == false && input.walk_right      == true) { input.walk_right      = false; }
-        if (kbstate[SDL_SCANCODE_W     ] == false && kbstate[SDL_SCANCODE_UP   ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
-        if (kbstate[SDL_SCANCODE_S     ] == false && kbstate[SDL_SCANCODE_DOWN ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
-        if (kbstate[SDL_SCANCODE_Q     ] == false && input.walk_up         == true) { input.walk_up         = false; }
-        if (kbstate[SDL_SCANCODE_E     ] == false && input.walk_down       == true) { input.walk_down       = false; }
-        if (kbstate[SDL_SCANCODE_J     ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
-        if (kbstate[SDL_SCANCODE_K     ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
-        if (kbstate[SDL_SCANCODE_F     ] == false && input.speed_up        == true) { input.speed_up        = false; }
-        if (kbstate[SDL_SCANCODE_R     ] == false && input.speed_down      == true) { input.speed_down      = false; }
-        if (kbstate[SDL_SCANCODE_RETURN] == false && input.enter       == true) { input.enter       = false; }
-        if (kbstate[SDL_SCANCODE_LALT  ] == false && input.alt       == true) { input.alt       = false; }
-
-        if (input.alt && input.enter) {
-            input.alt = false;
-            input.enter = false;
-            input.f11 = true;
-        }
-
+        read_input(input, loop);
         update(input, res, delta_time);
-
-        if (input.f11) { input.f11 = false; }
-        if (input.speed_down) { input.speed_down = false; }
-        if (input.speed_up) { input.speed_up = false; }
+        reset_input(input);
 
         SDL_GL_SwapWindow(main_window); 
     }
@@ -271,60 +192,61 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     stbi_image_free(data);
 
     float gap = 1.0f;
-    float half_width = float(width) / 2.0f * gap * 1.16666f;
+    float half_width = float(width) / 2.0f * gap * snes_factor;
     float half_height = float(height) / 2.0f * gap;
 
     std::vector<glm::vec2> offsets(width * height);
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
-            float x = i * gap * 1.16666f - half_width;
+            float x = i * gap * snes_factor - half_width;
             float y = j * gap - half_height;
             offsets[j * width + i] = glm::vec2(x, y);
         }
     }
 
     float vertices[] = {
-        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+        // cube coordinates                     cube normals
+        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+         0.5f * snes_factor, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+         0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+         0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+        -0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
 
-        -0.5f * 1.16666f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f * 1.16666f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f * 1.16666f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+        -0.5f * snes_factor, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+         0.5f * snes_factor, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+        -0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+        -0.5f * snes_factor, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
 
-        -0.5f * 1.16666f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f * 1.16666f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f * 1.16666f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f * 1.16666f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f * 1.16666f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f * 1.16666f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor,  0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor,  0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor, -0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor, -0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor, -0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
+        -0.5f * snes_factor,  0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
 
-         0.5f * 1.16666f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f * 1.16666f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f * 1.16666f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f * 1.16666f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f * 1.16666f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f * 1.16666f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor,  0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor,  0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor, -0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor, -0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor, -0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
+         0.5f * snes_factor,  0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
 
-        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f * 1.16666f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f * 1.16666f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f * 1.16666f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f * 1.16666f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f * 1.16666f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
+         0.5f * snes_factor, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
+         0.5f * snes_factor, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
+         0.5f * snes_factor, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
+        -0.5f * snes_factor, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
+        -0.5f * snes_factor, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
 
-        -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f * 1.16666f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f * 1.16666f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+        -0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
+         0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
+         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
+         0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
+        -0.5f * snes_factor,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
+        -0.5f * snes_factor,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f
     };
 
     unsigned int VAO;
@@ -349,7 +271,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glBindBuffer(GL_ARRAY_BUFFER, colorsVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * width * height, &colors[0], GL_STATIC_DRAW);
 
-        // set attribute pointers for matrix (4 times vec4)
+    // color attribute
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
     glVertexAttribDivisor(2, 1);
@@ -360,6 +282,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glBindBuffer(GL_ARRAY_BUFFER, offsetsVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * width * height, &offsets[0], GL_STATIC_DRAW);
 
+    // offset attribute
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
     glVertexAttribDivisor(3, 1);
@@ -415,9 +338,9 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.camera.MovementSpeed = 0.1f;
 
     if (input.spread_voxels)
-        res.cur_voxel_gap += 0.05f * delta_time * res.camera.MovementSpeed;
+        res.cur_voxel_gap += 0.005f * delta_time * res.camera.MovementSpeed;
     if (input.collapse_voxels)
-        res.cur_voxel_gap -= 0.05f * delta_time * res.camera.MovementSpeed;
+        res.cur_voxel_gap -= 0.005f * delta_time * res.camera.MovementSpeed;
     if (res.cur_voxel_gap <= res.min_voxel_gap)
         res.cur_voxel_gap = res.min_voxel_gap;
 
@@ -463,11 +386,12 @@ void update(const Input& input, Resources& res, float delta_time) {
     };
 
     glm::mat4 gap_4x4 = glm::make_mat4(gap_matrix_values);
-    // view/projection transformations
+
     glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.lightingShader.use();
+    res.lightingShader.setFloat("ambientStrength", 1.0);
     res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
     res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
     res.lightingShader.setMat4("projection", projection);
@@ -479,4 +403,86 @@ void update(const Input& input, Resources& res, float delta_time) {
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.width * res.height);
 
     res.ticks++;
+}
+
+void read_input(Input& input, bool& loop) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+            case SDL_QUIT:
+                loop = false;
+                break;
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym) {
+                    case SDLK_ESCAPE:
+                        loop = false;
+                        break;
+                    case SDLK_a: input.walk_left = true; break;
+                    case SDLK_d: input.walk_right = true; break;
+                    case SDLK_w: input.walk_forward = true; break;
+                    case SDLK_s: input.walk_backward = true; break;
+                    case SDLK_q: input.walk_up = true; break;
+                    case SDLK_e: input.walk_down = true; break;
+                    case SDLK_r: input.speed_down = true; break;
+                    case SDLK_f: input.speed_up = true; break;
+                    case SDLK_j: input.spread_voxels = true; break;
+                    case SDLK_k: input.collapse_voxels = true; break;
+                    case SDLK_UP: input.walk_forward = true; break;
+                    case SDLK_DOWN: input.walk_backward = true; break;
+                    case SDLK_LEFT: input.walk_left = true; break;
+                    case SDLK_RIGHT: input.walk_right = true; break;
+                    case SDLK_F11: input.f11 = true; break;
+                    case SDLK_LALT: input.alt = true; break;
+                    case SDLK_RETURN: input.enter = true; break;
+                }
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                switch (event.button.button)
+                {
+                    case SDL_BUTTON_LEFT: input.mouse_click_left = true; break;
+                }
+                break;
+            case SDL_MOUSEBUTTONUP:
+                switch (event.button.button)
+                {
+                    case SDL_BUTTON_LEFT: input.mouse_click_left = false; break;
+                }
+                break;
+            case SDL_MOUSEMOTION:
+                if (input.mouse_click_left) {
+                    input.mouse_motion_x = event.motion.x;
+                    input.mouse_motion_y = event.motion.y;
+                } else {
+                    input.mouse_motion_x = -1;
+                    input.mouse_motion_y = -1;
+                }
+                break;
+        }
+    }
+
+    const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+    if (kbstate[SDL_SCANCODE_A     ] == false && kbstate[SDL_SCANCODE_LEFT ] == false && input.walk_left       == true) { input.walk_left       = false; }
+    if (kbstate[SDL_SCANCODE_D     ] == false && kbstate[SDL_SCANCODE_RIGHT] == false && input.walk_right      == true) { input.walk_right      = false; }
+    if (kbstate[SDL_SCANCODE_W     ] == false && kbstate[SDL_SCANCODE_UP   ] == false && input.walk_forward    == true) { input.walk_forward    = false; }
+    if (kbstate[SDL_SCANCODE_S     ] == false && kbstate[SDL_SCANCODE_DOWN ] == false && input.walk_backward   == true) { input.walk_backward   = false; }
+    if (kbstate[SDL_SCANCODE_Q     ] == false && input.walk_up         == true) { input.walk_up         = false; }
+    if (kbstate[SDL_SCANCODE_E     ] == false && input.walk_down       == true) { input.walk_down       = false; }
+    if (kbstate[SDL_SCANCODE_J     ] == false && input.spread_voxels   == true) { input.spread_voxels   = false; }
+    if (kbstate[SDL_SCANCODE_K     ] == false && input.collapse_voxels == true) { input.collapse_voxels = false; }
+    if (kbstate[SDL_SCANCODE_F     ] == false && input.speed_up        == true) { input.speed_up        = false; }
+    if (kbstate[SDL_SCANCODE_R     ] == false && input.speed_down      == true) { input.speed_down      = false; }
+    if (kbstate[SDL_SCANCODE_RETURN] == false && input.enter       == true) { input.enter       = false; }
+    if (kbstate[SDL_SCANCODE_LALT  ] == false && input.alt       == true) { input.alt       = false; }
+
+    if (input.alt && input.enter) {
+        input.alt = false;
+        input.enter = false;
+        input.f11 = true;
+    }
+}
+
+void reset_input(Input& input) {
+    if (input.f11) { input.f11 = false; }
+    if (input.speed_down) { input.speed_down = false; }
+    if (input.speed_up) { input.speed_up = false; }
 }
