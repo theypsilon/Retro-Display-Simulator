@@ -382,14 +382,6 @@ void update(const Input& input, Resources& res, float delta_time) {
     auto height = res.height;
 
     float gap_value = res.cur_voxel_gap;
-    float gap_matrix_values[16] = {
-        gap_value,  0,  0,  0,
-        0,  gap_value,  0,  0,
-        0,  0,  gap_value,  0,
-        0,  0,  0,  gap_value
-    };
-
-    glm::mat4 gap_4x4 = glm::make_mat4(gap_matrix_values);
 
     glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
@@ -400,7 +392,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
     res.lightingShader.setMat4("projection", projection);
     res.lightingShader.setMat4("view", view);
-    res.lightingShader.setFloat("gap", gap_value);
+    res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
 
     // world transformation
     glBindVertexArray(res.cubeVAO);

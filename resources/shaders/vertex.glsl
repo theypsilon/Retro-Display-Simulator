@@ -10,7 +10,7 @@ out vec4 ObjectColor;
 
 uniform mat4 view;
 uniform mat4 projection;
-uniform float gap;
+uniform vec2 gap;
 
 void main()
 {
