@@ -6,7 +6,7 @@ layout (location = 3) in vec2 aOffset;
 
 out vec3 FragPos;
 out vec3 Normal;
-out vec4 FragColor;
+out vec4 ObjectColor;
 
 uniform mat4 view;
 uniform mat4 projection;
@@ -14,7 +14,7 @@ uniform float gap;
 
 void main()
 {
-	FragColor = aColor;
+	ObjectColor = aColor;
     FragPos = aPos + vec3(aOffset * gap, 0);
     Normal = aNormal;  
     
