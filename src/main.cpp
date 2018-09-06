@@ -297,7 +297,10 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glBindVertexArray(0);
 
     // be sure to activate shader when setting uniforms/drawing objects
-    Shader lightingShader{"resources/shaders/vertex.glsl", "resources/shaders/frags.glsl"};
+    Shader lightingShader{
+        FileSystem::getPath("resources/shaders/vertex.glsl").c_str(),
+        FileSystem::getPath("resources/shaders/frags.glsl").c_str()
+    };
     Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
     return Resources {
         window,
