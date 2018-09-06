@@ -16,7 +16,7 @@ uniform float wave;
 void main()
 {
 	float radius = length(aOffset);
-	ObjectColor = vec4(sin(wave + aOffset.x * aOffset.y) + 0.5, aColor.g * sin(wave + aOffset.x * aOffset.y) + 0.5, aColor.b * sin(wave + aOffset.x * aOffset.y) + 0.5, 1);
+	ObjectColor = vec4(sin(wave * radius * 1) + 0.5, sin(wave * radius * 2) + 0.5, sin(wave * radius * 3) + 0.5, 1);
     FragPos = aPos + vec3(aOffset * gap, 0) + vec3(0, 0, sin(wave + sin(wave / 10) * radius / 4) * 2);
     Normal = aNormal;  
     

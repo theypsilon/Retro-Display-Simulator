@@ -403,7 +403,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
 
 
-	res.wave += delta_time * 1.0f;
+	res.wave += delta_time * 0.1f;
 
     // world transformation
     glBindVertexArray(res.cubeVAO);
