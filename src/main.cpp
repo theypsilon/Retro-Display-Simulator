@@ -76,13 +76,14 @@ const long double ratio_256_224 = 256.0 / 224.0;
 const long double snes_factor_horizontal = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
 const long double snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
 
-unsigned int SCR_WIDTH = 800;
-unsigned int SCR_HEIGHT = 600;
+unsigned int SCR_WIDTH  = 1920 *2;
+unsigned int SCR_HEIGHT = 1080 *2;
 
 Resources load_resources(SDL_Window* window, const std::string& path);
 void update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
 void reset_input(Input& input);
+void windows_high_dpi_hack();
 
 int main(int argc, char* argv[]) {
 
@@ -94,11 +95,16 @@ int main(int argc, char* argv[]) {
 
     atexit (SDL_Quit);
 
+#ifdef WIN32
+	windows_high_dpi_hack();
+#else
     SDL_DisplayMode display_mode;
     if (SDL_GetDesktopDisplayMode(0, &display_mode) == 0) {
+		std::cout << "Resolution: " << display_mode.w << "x" << display_mode.h << std::endl;
         SCR_WIDTH = display_mode.w;
         SCR_HEIGHT = display_mode.h;
     }
+#endif
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -117,7 +123,7 @@ int main(int argc, char* argv[]) {
         SDL_WINDOWPOS_CENTERED,
         SCR_WIDTH,
         SCR_HEIGHT,
-        SDL_WINDOW_OPENGL
+        SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI
     );
 
     if (main_window == nullptr) {
@@ -534,4 +540,42 @@ void reset_input(Input& input) {
     if (input.f11) { input.f11 = false; }
     if (input.speed_down) { input.speed_down = false; }
     if (input.speed_up) { input.speed_up = false; }
+}
+
+void windows_high_dpi_hack() {
+#ifdef WIN32
+	typedef enum PROCESS_DPI_AWARENESS {
+		PROCESS_DPI_UNAWARE = 0,
+		PROCESS_SYSTEM_DPI_AWARE = 1,
+		PROCESS_PER_MONITOR_DPI_AWARE = 2
+	} PROCESS_DPI_AWARENESS;
+
+	void* userDLL;
+	BOOL(WINAPI *SetProcessDPIAware)(void); // Vista and later
+	void* shcoreDLL;
+	HRESULT(WINAPI *SetProcessDpiAwareness)(PROCESS_DPI_AWARENESS dpiAwareness); // Windows 8.1 and later
+
+	userDLL = SDL_LoadObject("USER32.DLL");
+	if (userDLL) {
+		SetProcessDPIAware = (BOOL(WINAPI *)(void)) SDL_LoadFunction(userDLL, "SetProcessDPIAware");
+	}
+
+	shcoreDLL = SDL_LoadObject("SHCORE.DLL");
+	if (shcoreDLL) {
+		SetProcessDpiAwareness = (HRESULT(WINAPI *)(PROCESS_DPI_AWARENESS)) SDL_LoadFunction(shcoreDLL, "SetProcessDpiAwareness");
+	}
+
+	if (SetProcessDpiAwareness) {
+		/* Try Windows 8.1+ version */
+		HRESULT result = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+		SDL_Log("called SetProcessDpiAwareness: %d", (result == S_OK) ? 1 : 0);
+	}
+	else if (SetProcessDPIAware) {
+		/* Try Vista - Windows 8 version.
+		This has a constant scale factor for all monitors.
+		*/
+		BOOL success = SetProcessDPIAware();
+		SDL_Log("called SetProcessDPIAware: %d", (int)success);
+	}
+#endif
 }
