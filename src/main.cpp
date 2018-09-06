@@ -41,9 +41,9 @@ struct Resources {
     bool full_screen;
 	float wave;
 	GLuint info_texture;
-	int info_w, info_h;
 	unsigned int infoVAO;
 	Shader infoShader;
+    bool showing_info;
 };
 
 struct Input {
@@ -60,6 +60,7 @@ struct Input {
     spread_voxels = false,
     collapse_voxels = false,
     mouse_click_left = false,
+    f1 = false,
     f11 = false,
     alt = false,
     enter = false,
@@ -75,8 +76,8 @@ const long double ratio_256_224 = 256.0 / 224.0;
 const long double snes_factor_horizontal = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
 const long double snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
 
-unsigned int SCR_WIDTH = 640;
-unsigned int SCR_HEIGHT = 480;
+unsigned int SCR_WIDTH = 800;
+unsigned int SCR_HEIGHT = 600;
 
 Resources load_resources(SDL_Window* window, const std::string& path);
 void update(const Input& input, Resources& res, float delta_time);
@@ -99,9 +100,9 @@ int main(int argc, char* argv[]) {
         SCR_HEIGHT = display_mode.h;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
     //SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -111,7 +112,7 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // This is MSAA number of sampling
 
     auto main_window = SDL_CreateWindow(
-        "Retro Drawer", 
+        "Retro Voxel Display", 
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         SCR_WIDTH,
@@ -200,21 +201,25 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     }
 	int info_width, info_height, info_nr_channels;
 	GLuint info_texture;
-	data = stbi_load(FileSystem::getPath("resources/textures/megaman.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
+	data = stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
 	unsigned int infoVAO;
 	if (data) {
 		float vertices[] = {
 			// positions          // colors           // texture coords
-			0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
-			0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
-			-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
-			-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
+			1.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
+			1.0f,  -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+			0.75f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
+			0.75f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
 		};
 		unsigned int indices[] = {
 			0, 1, 3, // first triangle
 			1, 2, 3  // second triangle
 		};
 		unsigned int VBO, EBO;
+        glGenVertexArrays(1, &infoVAO);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);
+
 		glBindVertexArray(infoVAO);
 
 		glBindBuffer(GL_ARRAY_BUFFER, VBO);
@@ -243,10 +248,8 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, info_nr_channels == 3 ? GL_RGB : GL_RGBA, info_width, info_height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, info_width, info_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
-
-		glBindTexture(GL_TEXTURE_2D, 0);
 		stbi_image_free(data);
 	} else {
 		std::cout << "Failed to load info texture" << std::endl;
@@ -375,9 +378,9 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         false,
 		0.0f,
 		info_texture,
-		info_width, info_height,
 		infoVAO,
-		std::move(infoShader)
+		std::move(infoShader),
+        true
     };
 }
 
@@ -395,9 +398,12 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.last_time = now;
         res.ticks = 0;
     }
+
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    if (input.f1)
+        res.showing_info = !res.showing_info;
 
     if (input.speed_up)
         res.camera.MovementSpeed *= 1.5f;
@@ -469,10 +475,13 @@ void update(const Input& input, Resources& res, float delta_time) {
     glBindVertexArray(res.cubeVAO);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.width * res.height);
 
-	glBindTexture(GL_TEXTURE_2D, res.info_texture);
-	res.infoShader.use();
-	glBindVertexArray(res.infoVAO);
-	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    if (res.showing_info) {
+        glBindTexture(GL_TEXTURE_2D, res.info_texture);
+        res.infoShader.use();
+        res.infoShader.setFloat("wave", res.wave);
+        glBindVertexArray(res.infoVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
 
     res.ticks++;
 }
@@ -488,6 +497,7 @@ void read_input(Input& input, bool& loop) {
                 switch (event.key.keysym.sym) {
 					case SDLK_ESCAPE: loop = false; break;
                     case SDLK_F11: input.f11 = true; break;
+                    case SDLK_F1: input.f1 = true; break;
 					case SDLK_LALT: input.alt = true; break;
 					case SDLK_RETURN: input.enter = true; break;
 					case SDLK_r: input.speed_down = true; break;
@@ -520,6 +530,7 @@ void read_input(Input& input, bool& loop) {
 }
 
 void reset_input(Input& input) {
+    if (input.f1) { input.f1 = false; }
     if (input.f11) { input.f11 = false; }
     if (input.speed_down) { input.speed_down = false; }
     if (input.speed_up) { input.speed_up = false; }
