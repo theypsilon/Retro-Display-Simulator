@@ -40,6 +40,10 @@ struct Resources {
     float min_voxel_gap;
     bool full_screen;
 	float wave;
+	GLuint info_texture;
+	int info_w, info_h;
+	unsigned int infoVAO;
+	Shader infoShader;
 };
 
 struct Input {
@@ -81,7 +85,7 @@ void reset_input(Input& input);
 
 int main(int argc, char* argv[]) {
 
-    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/rainbow.jpg");
+    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/snes3.png");
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
         return -1;
@@ -176,8 +180,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     unsigned char *data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
     std::cout << "Will load instances: " << (width * height) << ", Size: " << (width * height * 16) << std::endl;
     std::vector<glm::vec4> colors(width * height);
-    if (data)
-    {
+    if (data) {
         std::cout << "width: " << width << ", height: " << height << ", nrChannels: " << nrChannels << std::endl;
         int index = 0;
         for (int j = 0; j < height; j++) {
@@ -191,13 +194,63 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
                 index += nrChannels;
             }
         }
+		stbi_image_free(data);
+    } else {
+        std::cout << "Failed to load target texture" << std::endl;
     }
-    else
-    {
-        std::cout << "Failed to load texture" << std::endl;
-    }
-    stbi_image_free(data);
+	int info_width, info_height, info_nr_channels;
+	GLuint info_texture;
+	data = stbi_load(FileSystem::getPath("resources/textures/megaman.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
+	unsigned int infoVAO;
+	if (data) {
+		float vertices[] = {
+			// positions          // colors           // texture coords
+			0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
+			0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+			-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
+			-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
+		};
+		unsigned int indices[] = {
+			0, 1, 3, // first triangle
+			1, 2, 3  // second triangle
+		};
+		unsigned int VBO, EBO;
+		glBindVertexArray(infoVAO);
 
+		glBindBuffer(GL_ARRAY_BUFFER, VBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+		// position attribute
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		// color attribute
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
+		// texture coord attribute
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+		glEnableVertexAttribArray(2);
+
+		glGenTextures(1, &info_texture);
+
+		glBindTexture(GL_TEXTURE_2D, info_texture);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// set texture wrapping to GL_REPEAT (default wrapping method)
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		// set texture filtering parameters
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, info_nr_channels == 3 ? GL_RGB : GL_RGBA, info_width, info_height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		stbi_image_free(data);
+	} else {
+		std::cout << "Failed to load info texture" << std::endl;
+	}
     float gap = 1.0f;
     float half_width = float(width) / 2.0f * gap * snes_factor_horizontal;
     float half_height = float(height) / 2.0f * gap;
@@ -301,6 +354,10 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         FileSystem::getPath("resources/shaders/vertex.glsl").c_str(),
         FileSystem::getPath("resources/shaders/frags.glsl").c_str()
     };
+	Shader infoShader{
+		FileSystem::getPath("resources/shaders/info_vertex.glsl").c_str(),
+		FileSystem::getPath("resources/shaders/info_frags.glsl").c_str()
+	};
     Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
     return Resources {
         window,
@@ -316,7 +373,11 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         1.0f,
         1.0f,
         false,
-		0.0f
+		0.0f,
+		info_texture,
+		info_width, info_height,
+		infoVAO,
+		std::move(infoShader)
     };
 }
 
@@ -402,12 +463,16 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lightingShader.setMat4("view", view);
     res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
 
-
 	res.wave += delta_time * 0.1f;
 
     // world transformation
     glBindVertexArray(res.cubeVAO);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.width * res.height);
+
+	glBindTexture(GL_TEXTURE_2D, res.info_texture);
+	res.infoShader.use();
+	glBindVertexArray(res.infoVAO);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     res.ticks++;
 }
