@@ -81,7 +81,7 @@ void reset_input(Input& input);
 
 int main(int argc, char* argv[]) {
 
-    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/snes3.png");
+    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/rainbow.jpg");
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
         return -1;
@@ -403,7 +403,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
 
 
-	res.wave += delta_time;
+	res.wave += delta_time * 0.1;
 
     // world transformation
     glBindVertexArray(res.cubeVAO);

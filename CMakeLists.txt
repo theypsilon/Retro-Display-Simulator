@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 if (WIN32)
-	set(SDL2_DIR "C:\\Users\\Jose\\Downloads\\SDL2-devel-2.0.8-VC\\SDL2-2.0.8")
+	set(SDL2_DIR $ENV{SDLDIR})
 endif()
 
 find_package(SDL2 REQUIRED)
