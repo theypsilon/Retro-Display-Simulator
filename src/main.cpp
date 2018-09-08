@@ -13,6 +13,8 @@
 #include <learnopengl/shader_m.h>
 #include <learnopengl/camera.h>
 
+#include <theypsilon/boolean_button.h>
+
 #include <cstdio>
 #include <cmath>
 #include <vector>
@@ -26,6 +28,10 @@ extern "C"
 	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
 #endif
+
+struct InternalButtons {
+	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter;
+};
 
 struct Resources {
     SDL_Window* window;
@@ -44,6 +50,7 @@ struct Resources {
 	unsigned int infoVAO;
 	Shader infoShader;
     bool showing_info;
+	InternalButtons buttons;
 };
 
 struct Input {
@@ -82,11 +89,10 @@ unsigned int SCR_HEIGHT = 1080 *2;
 Resources load_resources(SDL_Window* window, const std::string& path);
 void update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
-void reset_input(Input& input);
 void windows_high_dpi_hack();
 
 int main(int argc, char* argv[]) {
-
+	std::cout << __func__ << std::endl;
     const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/snes3.png");
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
@@ -172,7 +178,6 @@ int main(int argc, char* argv[]) {
 
         read_input(input, loop);
         update(input, res, delta_time);
-        reset_input(input);
 
         SDL_GL_SwapWindow(main_window); 
     }
@@ -368,6 +373,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		FileSystem::getPath("resources/shaders/info_frags.glsl").c_str()
 	};
     Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
+	camera.MovementSpeed *= 5;
     return Resources {
         window,
         0,
@@ -391,7 +397,10 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 }
 
 void update(const Input& input, Resources& res, float delta_time) {
-    if (input.f11) {
+	res.buttons.f11.track(input.f11);
+	res.buttons.lalt.track(input.alt);
+	res.buttons.enter.track(input.enter);
+    if (res.buttons.f11.just_pressed() || res.buttons.enter.just_pressed() && res.buttons.lalt || res.buttons.enter && res.buttons.lalt.just_pressed()) {
         auto flag = res.full_screen ? 0 : SDL_WINDOW_FULLSCREEN;
         SDL_SetWindowFullscreen(res.window, flag);
         res.full_screen = !res.full_screen;
@@ -408,12 +417,17 @@ void update(const Input& input, Resources& res, float delta_time) {
     glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (input.f1)
-        res.showing_info = !res.showing_info;
+	res.buttons.f1.track(input.f1);
+	if (res.buttons.f1.just_pressed()) {
+		res.showing_info = !res.showing_info;
+	}
 
-    if (input.speed_up)
+	res.buttons.speed_up.track(input.speed_up);
+    if (res.buttons.speed_up.just_pressed())
         res.camera.MovementSpeed *= 1.5f;
-    if (input.speed_down)
+
+	res.buttons.speed_down.track(input.speed_down);
+    if (res.buttons.speed_down.just_pressed())
         res.camera.MovementSpeed /= 1.5f;
 
     if (res.camera.MovementSpeed > 10000)
@@ -493,29 +507,12 @@ void update(const Input& input, Resources& res, float delta_time) {
 }
 
 void read_input(Input& input, bool& loop) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-            case SDL_QUIT:
-                loop = false;
-                break;
-            case SDL_KEYDOWN:
-                switch (event.key.keysym.sym) {
-					case SDLK_ESCAPE: loop = false; break;
-                    case SDLK_F11: input.f11 = true; break;
-                    case SDLK_F1: input.f1 = true; break;
-					case SDLK_LALT: input.alt = true; break;
-					case SDLK_RETURN: input.enter = true; break;
-					case SDLK_r: input.speed_down = true; break;
-					case SDLK_f: input.speed_up = true; break;
-                }
-                break;
-        }
-    }
+	SDL_PumpEvents();
 
 	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT);
 
     const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+	loop = kbstate[SDL_SCANCODE_ESCAPE] == false && SDL_QuitRequested() == false;
     input.walk_left       = kbstate[SDL_SCANCODE_A     ] || kbstate[SDL_SCANCODE_LEFT ];
     input.walk_right      = kbstate[SDL_SCANCODE_D     ] || kbstate[SDL_SCANCODE_RIGHT];
     input.walk_forward    = kbstate[SDL_SCANCODE_W     ] || kbstate[SDL_SCANCODE_UP   ];
@@ -524,22 +521,12 @@ void read_input(Input& input, bool& loop) {
     input.walk_down       = kbstate[SDL_SCANCODE_E     ];
     input.spread_voxels   = kbstate[SDL_SCANCODE_J     ];
     input.collapse_voxels = kbstate[SDL_SCANCODE_K     ];
-    
-    if (kbstate[SDL_SCANCODE_RETURN] == false) { input.enter = false; }
-    if (kbstate[SDL_SCANCODE_LALT  ] == false) { input.alt   = false; }
-
-    if (input.alt && input.enter) {
-        input.alt = false;
-        input.enter = false;
-        input.f11 = true;
-    }
-}
-
-void reset_input(Input& input) {
-    if (input.f1) { input.f1 = false; }
-    if (input.f11) { input.f11 = false; }
-    if (input.speed_down) { input.speed_down = false; }
-    if (input.speed_up) { input.speed_up = false; }
+	input.speed_up        = kbstate[SDL_SCANCODE_F];
+	input.speed_down      = kbstate[SDL_SCANCODE_R];
+	input.f1              = kbstate[SDL_SCANCODE_F1];
+	input.f11             = kbstate[SDL_SCANCODE_F11];
+	input.alt = kbstate[SDL_SCANCODE_LALT];
+	input.enter = kbstate[SDL_SCANCODE_RETURN];
 }
 
 void windows_high_dpi_hack() {
