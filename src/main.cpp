@@ -39,6 +39,7 @@ struct Resources {
     Uint32 last_time;
     Shader lightingShader;
 	ty::Camera camera;
+	float camera_zoom;
     unsigned int cubeVAO;
     int width, height;
     int last_mouse_x, last_mouse_y;
@@ -379,15 +380,16 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		FileSystem::getPath("resources/shaders/info_vertex.glsl").c_str(),
 		FileSystem::getPath("resources/shaders/info_frags.glsl").c_str()
 	};
-	ty::Camera ty_camera{};
-	ty_camera.movement_speed *= 5;
-	ty_camera.camera_position = glm::vec3{ 0.0f, 0.0f, 270.0f };
+	ty::Camera camera{};
+	camera.movement_speed *= 5;
+	camera.SetPosition(glm::vec3{ 0.0f, 0.0f, 270.0f });
     return Resources {
         window,
         0,
         0,
         std::move(lightingShader),
-		std::move(ty_camera),
+		std::move(camera),
+		45.0f,
         VAO,
         width,
         height,
@@ -453,35 +455,35 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.cur_voxel_gap = res.min_voxel_gap;
 
     if (input.turn_left) {
-        res.camera.Turn(ty::LEFT, delta_time);
+        res.camera.Turn(ty::CameraDirection::LEFT, delta_time);
     }
     if (input.turn_right) {
-        res.camera.Turn(ty::RIGHT, delta_time);
+        res.camera.Turn(ty::CameraDirection::RIGHT, delta_time);
     }
     if (input.turn_up) {
-        res.camera.Turn(ty::UP, delta_time);
+        res.camera.Turn(ty::CameraDirection::UP, delta_time);
     }
     if (input.turn_down) {
-        res.camera.Turn(ty::DOWN, delta_time);
+        res.camera.Turn(ty::CameraDirection::DOWN, delta_time);
     }
  
     if (input.walk_up) {
-        res.camera.Advance(ty::UP, delta_time);
+        res.camera.Advance(ty::CameraDirection::UP, delta_time);
     }
     if (input.walk_down) {
-        res.camera.Advance(ty::DOWN, delta_time);
+        res.camera.Advance(ty::CameraDirection::DOWN, delta_time);
     }
     if (input.walk_forward) {
-        res.camera.Advance(ty::FORWARD, delta_time);
+        res.camera.Advance(ty::CameraDirection::FORWARD, delta_time);
     }
     if (input.walk_backward) {
-        res.camera.Advance(ty::BACKWARD, delta_time);
+        res.camera.Advance(ty::CameraDirection::BACKWARD, delta_time);
     }
     if (input.walk_left) {
-        res.camera.Advance(ty::LEFT, delta_time);
+        res.camera.Advance(ty::CameraDirection::LEFT, delta_time);
     }
     if (input.walk_right) {
-        res.camera.Advance(ty::RIGHT, delta_time);
+        res.camera.Advance(ty::CameraDirection::RIGHT, delta_time);
     }
 
     if (input.mouse_click_left) {
@@ -507,7 +509,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     auto height = res.height;
     float gap_value = res.cur_voxel_gap;
 
-    glm::mat4 projection = glm::perspective(glm::radians(res.camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
 	if (res.showing_waves) {
