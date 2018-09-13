@@ -11,8 +11,8 @@
 
 #include <learnopengl/filesystem.h>
 #include <learnopengl/shader_m.h>
-#include <learnopengl/camera.h>
 
+#include <theypsilon/camera.h>
 #include <theypsilon/boolean_button.h>
 
 #include <cstdio>
@@ -30,7 +30,7 @@ extern "C"
 #endif
 
 struct InternalButtons {
-	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter;
+	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving;
 };
 
 struct Resources {
@@ -38,7 +38,7 @@ struct Resources {
     unsigned int ticks;
     Uint32 last_time;
     Shader lightingShader;
-    Camera camera;
+	ty::Camera camera;
     unsigned int cubeVAO;
     int width, height;
     int last_mouse_x, last_mouse_y;
@@ -50,29 +50,36 @@ struct Resources {
 	unsigned int infoVAO;
 	Shader infoShader;
     bool showing_info;
+	bool showing_waves;
 	InternalButtons buttons;
 };
 
 struct Input {
-    bool walk_left = false,
-    walk_right = false,
-    walk_up = false,
-    walk_down = false,
-    walk_forward = false,
-    walk_backward = false,
-    look_left = false,
-    look_right = false,
-    look_up = false,
-    look_down = false,
-    spread_voxels = false,
-    collapse_voxels = false,
-    mouse_click_left = false,
-    f1 = false,
-    f11 = false,
-    alt = false,
-    enter = false,
-    speed_up = false,
-    speed_down = false;
+	bool walk_left = false,
+		walk_right = false,
+		walk_up = false,
+		walk_down = false,
+		walk_forward = false,
+		walk_backward = false,
+		look_left = false,
+		look_right = false,
+		look_up = false,
+		look_down = false,
+		turn_up = false,
+		turn_down = false,
+		turn_left = false,
+		turn_right = false,
+		spread_voxels = false,
+		collapse_voxels = false,
+		mouse_click_left = false,
+		f1 = false,
+		f11 = false,
+		alt = false,
+		enter = false,
+		speed_up = false,
+		speed_down = false,
+		change_view = false,
+		change_waving = false;
     int mouse_motion_x = -1;
     int mouse_motion_y = -1;
 };
@@ -372,14 +379,15 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		FileSystem::getPath("resources/shaders/info_vertex.glsl").c_str(),
 		FileSystem::getPath("resources/shaders/info_frags.glsl").c_str()
 	};
-    Camera camera{glm::vec3{0.0f, 0.0f, 270.0f}};
-	camera.MovementSpeed *= 5;
+	ty::Camera ty_camera{};
+	ty_camera.movement_speed *= 5;
+	ty_camera.camera_position = glm::vec3{ 0.0f, 0.0f, 270.0f };
     return Resources {
         window,
         0,
         0,
         std::move(lightingShader),
-        std::move(camera),
+		std::move(ty_camera),
         VAO,
         width,
         height,
@@ -414,8 +422,10 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.ticks = 0;
     }
 
-    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	res.buttons.waving.track(input.change_waving);
+	if (res.buttons.waving.just_released()) {
+		res.showing_waves = !res.showing_waves;
+	}
 
 	res.buttons.f1.track(input.f1);
 	if (res.buttons.f1.just_pressed()) {
@@ -424,49 +434,70 @@ void update(const Input& input, Resources& res, float delta_time) {
 
 	res.buttons.speed_up.track(input.speed_up);
     if (res.buttons.speed_up.just_pressed())
-        res.camera.MovementSpeed *= 1.5f;
+        res.camera.movement_speed *= 1.5f;
 
 	res.buttons.speed_down.track(input.speed_down);
     if (res.buttons.speed_down.just_pressed())
-        res.camera.MovementSpeed /= 1.5f;
+        res.camera.movement_speed /= 1.5f;
 
-    if (res.camera.MovementSpeed > 10000)
-        res.camera.MovementSpeed = 10000;
-    if (res.camera.MovementSpeed < 0.1)
-        res.camera.MovementSpeed = 0.1f;
+    if (res.camera.movement_speed > 10000)
+        res.camera.movement_speed = 10000;
+    if (res.camera.movement_speed < 0.1)
+        res.camera.movement_speed = 0.1f;
 
     if (input.spread_voxels)
-        res.cur_voxel_gap += 0.005f * delta_time * res.camera.MovementSpeed;
+        res.cur_voxel_gap += 0.005f * delta_time * res.camera.movement_speed;
     if (input.collapse_voxels)
-        res.cur_voxel_gap -= 0.005f * delta_time * res.camera.MovementSpeed;
+        res.cur_voxel_gap -= 0.005f * delta_time * res.camera.movement_speed;
     if (res.cur_voxel_gap <= res.min_voxel_gap)
         res.cur_voxel_gap = res.min_voxel_gap;
 
-    if (input.walk_up)
-        res.camera.ProcessKeyboard(UP, delta_time);
-    if (input.walk_down)
-        res.camera.ProcessKeyboard(DOWN, delta_time);
-    if (input.walk_forward)
-        res.camera.ProcessKeyboard(FORWARD, delta_time);
-    if (input.walk_backward)
-        res.camera.ProcessKeyboard(BACKWARD, delta_time);
-    if (input.walk_left)
-        res.camera.ProcessKeyboard(LEFT, delta_time);
-    if (input.walk_right)
-        res.camera.ProcessKeyboard(RIGHT, delta_time);
+    if (input.turn_left) {
+        res.camera.Turn(ty::LEFT, delta_time);
+    }
+    if (input.turn_right) {
+        res.camera.Turn(ty::RIGHT, delta_time);
+    }
+    if (input.turn_up) {
+        res.camera.Turn(ty::UP, delta_time);
+    }
+    if (input.turn_down) {
+        res.camera.Turn(ty::DOWN, delta_time);
+    }
+ 
+    if (input.walk_up) {
+        res.camera.Advance(ty::UP, delta_time);
+    }
+    if (input.walk_down) {
+        res.camera.Advance(ty::DOWN, delta_time);
+    }
+    if (input.walk_forward) {
+        res.camera.Advance(ty::FORWARD, delta_time);
+    }
+    if (input.walk_backward) {
+        res.camera.Advance(ty::BACKWARD, delta_time);
+    }
+    if (input.walk_left) {
+        res.camera.Advance(ty::LEFT, delta_time);
+    }
+    if (input.walk_right) {
+        res.camera.Advance(ty::RIGHT, delta_time);
+    }
 
     if (input.mouse_click_left) {
         if (res.last_mouse_x < 0) {
             res.last_mouse_x = input.mouse_motion_x;
             res.last_mouse_y = input.mouse_motion_y;
-        }
-        float xoffset = input.mouse_motion_x - res.last_mouse_x;
-        float yoffset = res.last_mouse_y - input.mouse_motion_y; // reversed since y-coordinates go from bottom to top
+		}
+		else {
+			float xoffset = input.mouse_motion_x - res.last_mouse_x;
+			float yoffset = res.last_mouse_y - input.mouse_motion_y; // reversed since y-coordinates go from bottom to top
 
-        res.last_mouse_x = input.mouse_motion_x;
-        res.last_mouse_y = input.mouse_motion_y;
+			res.last_mouse_x = input.mouse_motion_x;
+			res.last_mouse_y = input.mouse_motion_y;
 
-        res.camera.ProcessMouseMovement(xoffset, yoffset);
+			res.camera.Drag(xoffset, yoffset);
+		}
     } else {
         res.last_mouse_x = -1;
         res.last_mouse_y = -1;
@@ -474,11 +505,21 @@ void update(const Input& input, Resources& res, float delta_time) {
 
     auto width = res.width;
     auto height = res.height;
-
     float gap_value = res.cur_voxel_gap;
 
-    glm::mat4 projection = glm::perspective(glm::radians(res.camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(res.camera.zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
+
+	if (res.showing_waves) {
+		res.wave += delta_time * 0.1f;
+	}
+	else {
+		res.wave = 0;
+	}
+	res.ticks++;
+
+	glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     res.lightingShader.use();
 	res.lightingShader.setFloat("wave", res.wave * 7);
@@ -488,8 +529,6 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lightingShader.setMat4("projection", projection);
     res.lightingShader.setMat4("view", view);
     res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
-
-	res.wave += delta_time * 0.1f;
 
     // world transformation
     glBindVertexArray(res.cubeVAO);
@@ -502,8 +541,6 @@ void update(const Input& input, Resources& res, float delta_time) {
         glBindVertexArray(res.infoVAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     }
-
-    res.ticks++;
 }
 
 void read_input(Input& input, bool& loop) {
@@ -513,12 +550,16 @@ void read_input(Input& input, bool& loop) {
 
     const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
 	loop = kbstate[SDL_SCANCODE_ESCAPE] == false && SDL_QuitRequested() == false;
-    input.walk_left       = kbstate[SDL_SCANCODE_A     ] || kbstate[SDL_SCANCODE_LEFT ];
-    input.walk_right      = kbstate[SDL_SCANCODE_D     ] || kbstate[SDL_SCANCODE_RIGHT];
-    input.walk_forward    = kbstate[SDL_SCANCODE_W     ] || kbstate[SDL_SCANCODE_UP   ];
-    input.walk_backward   = kbstate[SDL_SCANCODE_S     ] || kbstate[SDL_SCANCODE_DOWN ];
+    input.walk_left       = kbstate[SDL_SCANCODE_A     ];// || kbstate[SDL_SCANCODE_LEFT ];
+    input.walk_right      = kbstate[SDL_SCANCODE_D     ];// || kbstate[SDL_SCANCODE_RIGHT];
+    input.walk_forward    = kbstate[SDL_SCANCODE_W     ];// || kbstate[SDL_SCANCODE_UP   ];
+    input.walk_backward   = kbstate[SDL_SCANCODE_S     ];// || kbstate[SDL_SCANCODE_DOWN ];
     input.walk_up         = kbstate[SDL_SCANCODE_Q     ];
     input.walk_down       = kbstate[SDL_SCANCODE_E     ];
+    input.turn_left       = kbstate[SDL_SCANCODE_LEFT  ];
+    input.turn_right      = kbstate[SDL_SCANCODE_RIGHT ];
+    input.turn_up         = kbstate[SDL_SCANCODE_UP    ];
+    input.turn_down       = kbstate[SDL_SCANCODE_DOWN  ];
     input.spread_voxels   = kbstate[SDL_SCANCODE_J     ];
     input.collapse_voxels = kbstate[SDL_SCANCODE_K     ];
 	input.speed_up        = kbstate[SDL_SCANCODE_F];
@@ -527,6 +568,8 @@ void read_input(Input& input, bool& loop) {
 	input.f11             = kbstate[SDL_SCANCODE_F11];
 	input.alt = kbstate[SDL_SCANCODE_LALT];
 	input.enter = kbstate[SDL_SCANCODE_RETURN];
+	input.change_view = kbstate[SDL_SCANCODE_C];
+	input.change_waving = kbstate[SDL_SCANCODE_P];
 }
 
 void windows_high_dpi_hack() {

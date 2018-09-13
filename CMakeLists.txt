@@ -27,14 +27,16 @@ add_library(GLAD "src/glad.c")
 set(LIBS ${LIBS} GLAD)
 
 set(LIBS ${LIBS} "${SDL2_LIBRARIES}")
+
+set(SRCS ${SRCS} "src/main.cpp")
 if (WIN32)
-	add_executable(retro-voxel-display "src/main.cpp")
+	add_executable(retro-voxel-display ${SRCS})
 	add_custom_command(TARGET retro-voxel-display POST_BUILD
      COMMAND ${CMAKE_COMMAND} -E copy_if_different
          "${SDL2_DIR}/lib/x64/SDL2.dll"
          $<TARGET_FILE_DIR:retro-voxel-display>)
 else()
-	add_executable(retro-voxel-display "src/main.cpp")
+	add_executable(retro-voxel-display ${SRCS})
 endif()
 
 target_link_libraries(retro-voxel-display ${LIBS})
