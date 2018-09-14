@@ -12,20 +12,20 @@ Written by José Manuel Barroso Galindo <theypsilon@gmail.com>
 namespace ty {
 
 	enum class CameraDirection {
-		UP, DOWN, LEFT, RIGHT, FORWARD, BACKWARD
+		UP, DOWN, LEFT, RIGHT, FORWARD, BACKWARD, NONE
 	};
 
 	class Camera {
 	public:
-		float movement_speed = 10;
+		double movement_speed = 10;
 
 		void SetPosition(glm::vec3 pos) {
 			camera_position = pos;
 			need_update = true;
 		}
 
-		void Advance(CameraDirection direction, float dt) {
-			float velocity = movement_speed * dt;
+		void Advance(CameraDirection direction, double dt) {
+			double velocity = movement_speed * dt;
 			switch (direction) {
 				case CameraDirection::UP:
 					camera_position_delta += axis_up * velocity;
@@ -52,14 +52,14 @@ namespace ty {
 			need_update = true;
 		}
 
-		void Drag(float xoffset, float yoffset) {
-			camera_pitch = camera_pitch + xoffset * 0.0003;
+		void Drag(double xoffset, double yoffset) {
+			camera_pitch = camera_pitch - xoffset * 0.0003;
 			camera_heading = camera_heading + yoffset * 0.0003;
 			need_update = true;
 		}
 
-		void Turn(CameraDirection direction, float dt) {
-			float velocity = movement_speed * dt * 0.001;
+		void Turn(CameraDirection direction, double dt) {
+			double velocity = movement_speed * dt * 0.001;
 			switch (direction) {
 				case CameraDirection::LEFT:
 					camera_pitch += velocity;
@@ -80,7 +80,23 @@ namespace ty {
 			need_update = true;
 		}
 
-		glm::mat4 GetViewMatrix()
+		void Rotate(CameraDirection direction, double dt) {
+			double velocity = movement_speed * dt * 0.001;
+			switch (direction) {
+				case CameraDirection::LEFT:
+					camera_rotate += velocity;
+					break;
+				case CameraDirection::RIGHT:
+					camera_rotate -= velocity;
+					break;
+				default:
+					std::cerr << "unreachable! " << __FILE__ << "@" << __LINE__ << std::endl;
+					break;
+			}
+			need_update = true;
+		}
+
+		glm::dmat4 GetViewMatrix()
 		{
 			if (need_update) {
 				Update();
@@ -92,23 +108,25 @@ namespace ty {
 	private:
 		bool need_update = true;
 
-		glm::vec3 camera_position = glm::vec3{ 0,0,0 };
-		glm::vec3 camera_position_delta = glm::vec3{ 0,0,0 };
-		glm::vec3 camera_direction = glm::vec3{ 0,0,-1 };
+		glm::dvec3 camera_position = glm::dvec3{ 0,0,0 };
+		glm::dvec3 camera_position_delta = glm::dvec3{ 0,0,0 };
+		glm::dvec3 camera_direction = glm::dvec3{ 0,0,-1 };
 
-		float camera_heading = 0;
-		float camera_pitch = 0;
+		double camera_heading = 0;
+		double camera_pitch = 0;
+		double camera_rotate = 0;
 
-		glm::vec3 axis_up = glm::vec3{ 0.0f, 1.0f, 0.0f };
-		glm::vec3 axis_right = glm::vec3{ 1.0f, 0.0f, 0.0f };
+		glm::dvec3 axis_up = glm::dvec3{ 0.0, 1.0, 0.0 };
+		glm::dvec3 axis_right = glm::dvec3{ 1.0, 0.0, 0.0 };
 
-		glm::mat4 view;
+		glm::dmat4 view;
 
 		void Update() {
-			glm::quat pitch_quat = glm::angleAxis(camera_pitch, axis_up);
-			glm::quat heading_quat = glm::angleAxis(camera_heading, axis_right);
+			glm::dquat pitch_quat = glm::angleAxis(camera_pitch, axis_up);
+			glm::dquat heading_quat = glm::angleAxis(camera_heading, axis_right);
+			glm::dquat rotate_quat = glm::angleAxis(camera_rotate, camera_direction);
 			
-			glm::quat temp = glm::normalize(glm::cross(pitch_quat, heading_quat));
+			glm::dquat temp = glm::cross(glm::cross(pitch_quat, heading_quat), rotate_quat);
 
 			camera_direction = glm::rotate(temp, camera_direction);
 			axis_up = glm::rotate(temp, axis_up);
@@ -118,7 +136,8 @@ namespace ty {
 			
 			camera_heading *= .5;
 			camera_pitch *= .5;
-			camera_position_delta = camera_position_delta * .8f;
+			camera_rotate *= .5;
+			camera_position_delta = camera_position_delta * .8;
 
 			view = glm::lookAt(camera_position, camera_position + camera_direction, axis_up);
 		}

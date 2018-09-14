@@ -46,10 +46,11 @@ struct Resources {
     float cur_voxel_gap;
     float min_voxel_gap;
     bool full_screen;
-	float wave;
+	float voxels_pulse;
 	GLuint info_texture;
 	unsigned int infoVAO;
 	Shader infoShader;
+    float info_mixer;
     bool showing_info;
 	bool showing_waves;
 	InternalButtons buttons;
@@ -70,6 +71,8 @@ struct Input {
 		turn_down = false,
 		turn_left = false,
 		turn_right = false,
+        rotate_left = false,
+        rotate_right = false,
 		spread_voxels = false,
 		collapse_voxels = false,
 		mouse_click_left = false,
@@ -402,6 +405,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		info_texture,
 		infoVAO,
 		std::move(infoShader),
+        0,
         true
     };
 }
@@ -454,36 +458,34 @@ void update(const Input& input, Resources& res, float delta_time) {
     if (res.cur_voxel_gap <= res.min_voxel_gap)
         res.cur_voxel_gap = res.min_voxel_gap;
 
-    if (input.turn_left) {
-        res.camera.Turn(ty::CameraDirection::LEFT, delta_time);
+    auto turn_direction = ty::CameraDirection::NONE;
+    if (input.turn_up       && !input.turn_down     ) turn_direction = ty::CameraDirection::UP;
+    if (input.turn_down     && !input.turn_up       ) turn_direction = ty::CameraDirection::DOWN;
+    if (input.turn_left     && !input.turn_right    ) turn_direction = ty::CameraDirection::LEFT;
+    if (input.turn_right    && !input.turn_left     ) turn_direction = ty::CameraDirection::RIGHT;
+
+    if (turn_direction != ty::CameraDirection::NONE) {
+        res.camera.Turn(turn_direction, delta_time);
     }
-    if (input.turn_right) {
-        res.camera.Turn(ty::CameraDirection::RIGHT, delta_time);
+
+    auto advance_direction = ty::CameraDirection::NONE;
+    if (input.walk_up       && !input.walk_down     ) advance_direction = ty::CameraDirection::UP;
+    if (input.walk_down     && !input.walk_up       ) advance_direction = ty::CameraDirection::DOWN;
+    if (input.walk_forward  && !input.walk_backward ) advance_direction = ty::CameraDirection::FORWARD;
+    if (input.walk_backward && !input.walk_forward  ) advance_direction = ty::CameraDirection::BACKWARD;
+    if (input.walk_left     && !input.walk_right    ) advance_direction = ty::CameraDirection::LEFT;
+    if (input.walk_right    && !input.walk_left     ) advance_direction = ty::CameraDirection::RIGHT;
+
+    if (advance_direction != ty::CameraDirection::NONE) {
+        res.camera.Advance(advance_direction, delta_time);   
     }
-    if (input.turn_up) {
-        res.camera.Turn(ty::CameraDirection::UP, delta_time);
-    }
-    if (input.turn_down) {
-        res.camera.Turn(ty::CameraDirection::DOWN, delta_time);
-    }
- 
-    if (input.walk_up) {
-        res.camera.Advance(ty::CameraDirection::UP, delta_time);
-    }
-    if (input.walk_down) {
-        res.camera.Advance(ty::CameraDirection::DOWN, delta_time);
-    }
-    if (input.walk_forward) {
-        res.camera.Advance(ty::CameraDirection::FORWARD, delta_time);
-    }
-    if (input.walk_backward) {
-        res.camera.Advance(ty::CameraDirection::BACKWARD, delta_time);
-    }
-    if (input.walk_left) {
-        res.camera.Advance(ty::CameraDirection::LEFT, delta_time);
-    }
-    if (input.walk_right) {
-        res.camera.Advance(ty::CameraDirection::RIGHT, delta_time);
+
+    auto rotate_direction = ty::CameraDirection::NONE;
+    if (input.rotate_left   && !input.rotate_right  ) rotate_direction = ty::CameraDirection::LEFT;
+    if (input.rotate_right  && !input.rotate_left   ) rotate_direction = ty::CameraDirection::RIGHT;
+
+    if (rotate_direction != ty::CameraDirection::NONE) {
+        res.camera.Rotate(rotate_direction, delta_time);
     }
 
     if (input.mouse_click_left) {
@@ -512,11 +514,12 @@ void update(const Input& input, Resources& res, float delta_time) {
     glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
+    res.info_mixer += delta_time * 0.1f;
 	if (res.showing_waves) {
-		res.wave += delta_time * 0.1f;
+		res.voxels_pulse += delta_time * 0.1f;
 	}
 	else {
-		res.wave = 0;
+		res.voxels_pulse = 0;
 	}
 	res.ticks++;
 
@@ -524,7 +527,7 @@ void update(const Input& input, Resources& res, float delta_time) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     res.lightingShader.use();
-	res.lightingShader.setFloat("wave", res.wave * 7);
+	res.lightingShader.setFloat("pulse", res.voxels_pulse * 7);
     res.lightingShader.setFloat("ambientStrength", 0.5f);
     res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
     res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
@@ -539,7 +542,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     if (res.showing_info) {
         glBindTexture(GL_TEXTURE_2D, res.info_texture);
         res.infoShader.use();
-        res.infoShader.setFloat("wave", res.wave);
+        res.infoShader.setFloat("mixer", res.info_mixer);
         glBindVertexArray(res.infoVAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     }
@@ -562,6 +565,8 @@ void read_input(Input& input, bool& loop) {
     input.turn_right      = kbstate[SDL_SCANCODE_RIGHT ];
     input.turn_up         = kbstate[SDL_SCANCODE_UP    ];
     input.turn_down       = kbstate[SDL_SCANCODE_DOWN  ];
+    input.rotate_right    = kbstate[SDL_SCANCODE_KP_PLUS ];
+    input.rotate_left     = kbstate[SDL_SCANCODE_KP_MINUS];
     input.spread_voxels   = kbstate[SDL_SCANCODE_J     ];
     input.collapse_voxels = kbstate[SDL_SCANCODE_K     ];
 	input.speed_up        = kbstate[SDL_SCANCODE_F];

@@ -5,7 +5,7 @@ in vec2 TexCoord;
 
 // texture sampler
 uniform sampler2D texture1;
-uniform float wave;
+uniform float mixer;
 
 void main()
 {
@@ -13,8 +13,8 @@ void main()
 	if (result.a == 0.0) {
 		discard;
 	}
-	float red   = sin(wave * 10) * 0.3 + 0.7;
-	float green = sin(wave * 15) * 0.3 + 0.7;
-	float blue  = sin(wave * 20) * 0.3 + 0.7;
+	float red   = sin(mixer * 10) * 0.3 + 0.7;
+	float green = sin(mixer * 15) * 0.3 + 0.7;
+	float blue  = sin(mixer * 20) * 0.3 + 0.7;
 	FragColor = vec4(red, blue, green, 1);
 }
