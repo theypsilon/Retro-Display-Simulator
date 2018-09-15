@@ -137,7 +137,7 @@ namespace ty {
 			camera_heading *= .5;
 			camera_pitch *= .5;
 			camera_rotate *= .5;
-			camera_position_delta = camera_position_delta * .8;
+			camera_position_delta = {};// camera_position_delta * .8;
 
 			view = glm::lookAt(camera_position, camera_position + camera_direction, axis_up);
 		}

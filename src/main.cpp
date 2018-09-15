@@ -94,13 +94,13 @@ const long double ratio_256_224 = 256.0 / 224.0;
 const long double snes_factor_horizontal = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
 const long double snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
 
-unsigned int SCR_WIDTH  = 1920 *2;
-unsigned int SCR_HEIGHT = 1080 *2;
+unsigned int SCR_WIDTH  = 1920;
+unsigned int SCR_HEIGHT = 1080;
 
 Resources load_resources(SDL_Window* window, const std::string& path);
 void update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
-void windows_high_dpi_hack();
+void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
 int main(int argc, char* argv[]) {
 	std::cout << __func__ << std::endl;
@@ -112,17 +112,6 @@ int main(int argc, char* argv[]) {
 
     atexit (SDL_Quit);
 
-#ifdef WIN32
-	windows_high_dpi_hack();
-#else
-    SDL_DisplayMode display_mode;
-    if (SDL_GetDesktopDisplayMode(0, &display_mode) == 0) {
-		std::cout << "Resolution: " << display_mode.w << "x" << display_mode.h << std::endl;
-        SCR_WIDTH = display_mode.w;
-        SCR_HEIGHT = display_mode.h;
-    }
-#endif
-
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -133,6 +122,15 @@ int main(int argc, char* argv[]) {
 
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1); // This is MSAA on/off
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // This is MSAA number of sampling
+
+#ifndef WIN32
+	SDL_DisplayMode display_mode;
+	if (SDL_GetDesktopDisplayMode(0, &display_mode) == 0) {
+		std::cout << "Resolution: " << display_mode.w << "x" << display_mode.h << std::endl;
+		SCR_WIDTH = display_mode.w;
+		SCR_HEIGHT = display_mode.h;
+	}
+#endif
 
     auto main_window = SDL_CreateWindow(
         "Retro Voxel Display", 
@@ -147,6 +145,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to create SDL Window\n";
         return -1;
     }
+
+#ifdef WIN32
+	windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT);
+#endif
 
     auto glContext = SDL_GL_CreateContext(main_window);
     if (glContext == nullptr) {
@@ -458,35 +460,20 @@ void update(const Input& input, Resources& res, float delta_time) {
     if (res.cur_voxel_gap <= res.min_voxel_gap)
         res.cur_voxel_gap = res.min_voxel_gap;
 
-    auto turn_direction = ty::CameraDirection::NONE;
-    if (input.turn_up       && !input.turn_down     ) turn_direction = ty::CameraDirection::UP;
-    if (input.turn_down     && !input.turn_up       ) turn_direction = ty::CameraDirection::DOWN;
-    if (input.turn_left     && !input.turn_right    ) turn_direction = ty::CameraDirection::LEFT;
-    if (input.turn_right    && !input.turn_left     ) turn_direction = ty::CameraDirection::RIGHT;
+    if (input.turn_up      ) res.camera.Turn(ty::CameraDirection::UP, delta_time);
+    if (input.turn_down    ) res.camera.Turn(ty::CameraDirection::DOWN, delta_time);
+    if (input.turn_left    ) res.camera.Turn(ty::CameraDirection::LEFT, delta_time);
+    if (input.turn_right   ) res.camera.Turn(ty::CameraDirection::RIGHT, delta_time);
 
-    if (turn_direction != ty::CameraDirection::NONE) {
-        res.camera.Turn(turn_direction, delta_time);
-    }
+    if (input.walk_up      ) res.camera.Advance(ty::CameraDirection::UP, delta_time);
+    if (input.walk_down    ) res.camera.Advance(ty::CameraDirection::DOWN, delta_time);
+    if (input.walk_forward ) res.camera.Advance(ty::CameraDirection::FORWARD, delta_time);
+    if (input.walk_backward) res.camera.Advance(ty::CameraDirection::BACKWARD, delta_time);
+    if (input.walk_left    ) res.camera.Advance(ty::CameraDirection::LEFT, delta_time);
+    if (input.walk_right   ) res.camera.Advance(ty::CameraDirection::RIGHT, delta_time);
 
-    auto advance_direction = ty::CameraDirection::NONE;
-    if (input.walk_up       && !input.walk_down     ) advance_direction = ty::CameraDirection::UP;
-    if (input.walk_down     && !input.walk_up       ) advance_direction = ty::CameraDirection::DOWN;
-    if (input.walk_forward  && !input.walk_backward ) advance_direction = ty::CameraDirection::FORWARD;
-    if (input.walk_backward && !input.walk_forward  ) advance_direction = ty::CameraDirection::BACKWARD;
-    if (input.walk_left     && !input.walk_right    ) advance_direction = ty::CameraDirection::LEFT;
-    if (input.walk_right    && !input.walk_left     ) advance_direction = ty::CameraDirection::RIGHT;
-
-    if (advance_direction != ty::CameraDirection::NONE) {
-        res.camera.Advance(advance_direction, delta_time);   
-    }
-
-    auto rotate_direction = ty::CameraDirection::NONE;
-    if (input.rotate_left   && !input.rotate_right  ) rotate_direction = ty::CameraDirection::LEFT;
-    if (input.rotate_right  && !input.rotate_left   ) rotate_direction = ty::CameraDirection::RIGHT;
-
-    if (rotate_direction != ty::CameraDirection::NONE) {
-        res.camera.Rotate(rotate_direction, delta_time);
-    }
+    if (input.rotate_left  ) res.camera.Rotate(ty::CameraDirection::LEFT, delta_time);
+    if (input.rotate_right ) res.camera.Rotate(ty::CameraDirection::RIGHT, delta_time);
 
     if (input.mouse_click_left) {
         if (res.last_mouse_x < 0) {
@@ -579,8 +566,15 @@ void read_input(Input& input, bool& loop) {
 	input.change_waving = kbstate[SDL_SCANCODE_P];
 }
 
-void windows_high_dpi_hack() {
 #ifdef WIN32
+#include <cassert>
+#include "SDL_syswm.h"
+void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height) {
+
+	SDL_SysWMinfo sys_wm_info;
+	SDL_VERSION(&sys_wm_info.version);
+	SDL_GetWindowWMInfo(window, &sys_wm_info);
+
 	typedef enum PROCESS_DPI_AWARENESS {
 		PROCESS_DPI_UNAWARE = 0,
 		PROCESS_SYSTEM_DPI_AWARE = 1,
@@ -602,17 +596,38 @@ void windows_high_dpi_hack() {
 		SetProcessDpiAwareness = (HRESULT(WINAPI *)(PROCESS_DPI_AWARENESS)) SDL_LoadFunction(shcoreDLL, "SetProcessDpiAwareness");
 	}
 
+	bool result = false;
 	if (SetProcessDpiAwareness) {
 		/* Try Windows 8.1+ version */
-		HRESULT result = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-		SDL_Log("called SetProcessDpiAwareness: %d", (result == S_OK) ? 1 : 0);
+		result = S_OK == SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+		SDL_Log("called SetProcessDpiAwareness: %d", result ? 1 : 0);
 	}
 	else if (SetProcessDPIAware) {
 		/* Try Vista - Windows 8 version.
 		This has a constant scale factor for all monitors.
 		*/
-		BOOL success = SetProcessDPIAware();
-		SDL_Log("called SetProcessDPIAware: %d", (int)success);
+		result = TRUE == SetProcessDPIAware();
+		SDL_Log("called SetProcessDPIAware: %d", result ? 1 : 0);
 	}
-#endif
+
+
+	auto monitor_from_window = (HMONITOR(WINAPI *)(HWND, DWORD)) SDL_LoadFunction(userDLL, "MonitorFromWindow");
+	auto get_monitor_info = (BOOL(WINAPI *)(HMONITOR, LPMONITORINFOEX)) SDL_LoadFunction(userDLL, "GetMonitorInfoA");
+	if (!monitor_from_window || !get_monitor_info || !result) {
+		return;
+	}
+
+	auto hMonitor = monitor_from_window(sys_wm_info.info.win.window, MONITOR_DEFAULTTOPRIMARY);
+
+	MONITORINFOEX miex;
+	miex.cbSize = sizeof(miex);
+	get_monitor_info(hMonitor, &miex);
+	auto real_width = (miex.rcMonitor.right - miex.rcMonitor.left);
+	auto real_height = (miex.rcMonitor.bottom - miex.rcMonitor.top);
+	if (real_width != width || real_height != height) {
+		width = real_width;
+		height = real_height;
+		SDL_SetWindowSize(window, width, height);
+	}
 }
+#endif
