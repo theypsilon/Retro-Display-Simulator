@@ -31,7 +31,7 @@ extern "C"
 #endif
 
 struct InternalButtons {
-	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving;
+	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels;
 };
 
 struct Resources {
@@ -41,7 +41,8 @@ struct Resources {
     Shader lighting_shader;
 	ty::Camera camera;
 	float camera_zoom;
-    unsigned int cube_vao;
+    unsigned int voxel_vao;
+    unsigned int voxel_vbo;
     int image_width, image_height;
     int last_mouse_x, last_mouse_y;
     float cur_voxel_scale_x;
@@ -55,6 +56,7 @@ struct Resources {
     float info_mixer;
     bool showing_info;
 	bool showing_waves;
+    bool showing_voxels;
 	InternalButtons buttons;
 };
 
@@ -75,6 +77,7 @@ struct Input {
 		turn_right = false,
         rotate_left = false,
         rotate_right = false,
+        swap_voxels_to_pixels = false,
 		increase_voxel_scale_y = false,
 		decrease_voxel_scale_y = false,
 		increase_voxel_scale_x = false,
@@ -99,6 +102,60 @@ const long double ratio_4_3 = 4.0 / 3.0;
 const long double ratio_256_224 = 256.0 / 224.0;
 const long double snes_factor_horizontal = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
 const long double snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
+
+const float cube_geometry[] = {
+    // cube coordinates                                           cube normals
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
+
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
+
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
+
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+};
+
+const float square_geometry[] = {
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+};
 
 unsigned int SCR_WIDTH  = 1920;
 unsigned int SCR_HEIGHT = 1080;
@@ -253,29 +310,29 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 	data = stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
 	unsigned int info_vao;
 	if (data) {
-		float vertices[] = {
+		float vertices_info[] = {
 			// positions          // colors           // texture coords
 			1.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
 			1.0f,  -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
 			0.75f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
 			0.75f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
 		};
-		unsigned int indices[] = {
+		unsigned int indices_info[] = {
 			0, 1, 3, // first triangle
 			1, 2, 3  // second triangle
 		};
-		unsigned int vbo, ebo;
+		unsigned int info_vbo, info_ebo;
         glGenVertexArrays(1, &info_vao);
-        glGenBuffers(1, &vbo);
-        glGenBuffers(1, &ebo);
+        glGenBuffers(1, &info_vbo);
+        glGenBuffers(1, &info_ebo);
 
 		glBindVertexArray(info_vao);
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, info_vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_info), vertices_info, GL_STATIC_DRAW);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info_ebo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices_info), indices_info, GL_STATIC_DRAW);
 
 		// position attribute
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
@@ -317,62 +374,15 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
             offsets[j * image_width + i] = glm::vec2(x * offset_multiplier, y * offset_multiplier);
         }
     }
-#define VOXEL_MODE
-    float vertices[] = {
-        // cube coordinates                                           cube normals
-#ifdef VOXEL_MODE
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-#endif
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-#ifdef VOXEL_MODE
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
 
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
-
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
-         0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
-        -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
-
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-         0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
-#endif
-    };
-
-    unsigned int vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    unsigned int voxel_vao;
+    glGenVertexArrays(1, &voxel_vao);
+    glBindVertexArray(voxel_vao);
 
     unsigned int voxel_vbo;
     glGenBuffers(1, &voxel_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, voxel_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cube_geometry), cube_geometry, GL_STATIC_DRAW);
 
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
@@ -424,7 +434,8 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         std::move(lighting_shader),
 		std::move(camera),
 		45.0f,
-        vao,
+        voxel_vao,
+        voxel_vbo,
         image_width,
         image_height,
         -1,
@@ -438,6 +449,8 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		info_vao,
 		std::move(info_shader),
         0,
+        true,
+        false,
         true
     };
 }
@@ -464,6 +477,18 @@ void update(const Input& input, Resources& res, float delta_time) {
 	if (res.buttons.waving.just_released()) {
 		res.showing_waves = !res.showing_waves;
 	}
+
+    res.buttons.swap_voxels_to_pixels.track(input.swap_voxels_to_pixels);
+    if (res.buttons.swap_voxels_to_pixels.just_released()) {
+        glBindBuffer(GL_ARRAY_BUFFER, res.voxel_vbo);
+        if (res.showing_voxels) {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(square_geometry), square_geometry, GL_STATIC_DRAW);
+        } else {
+            glBufferData(GL_ARRAY_BUFFER, sizeof(cube_geometry), cube_geometry, GL_STATIC_DRAW);
+        }
+        std::cout << "Activating " << (res.showing_voxels ? "pixels" : "voxels") << ".\n";
+        res.showing_voxels = !res.showing_voxels;
+    }
 
 	res.buttons.f1.track(input.f1);
 	if (res.buttons.f1.just_pressed()) {
@@ -558,6 +583,7 @@ void update(const Input& input, Resources& res, float delta_time) {
 	else {
 		res.voxels_pulse = 0;
 	}
+
 	res.ticks++;
 
 	glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
@@ -574,7 +600,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lighting_shader.setVec2("voxel_gap", voxel_gap);
 
     // world transformation
-    glBindVertexArray(res.cube_vao);
+    glBindVertexArray(res.voxel_vao);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.image_width * res.image_height);
 
     if (res.showing_info) {
@@ -594,32 +620,33 @@ void read_input(Input& input, bool& loop) {
 
 	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT) || kbstate[SDL_SCANCODE_SPACE];
 
-    input.walk_left       = kbstate[SDL_SCANCODE_A     ];// || kbstate[SDL_SCANCODE_LEFT ];
-    input.walk_right      = kbstate[SDL_SCANCODE_D     ];// || kbstate[SDL_SCANCODE_RIGHT];
-    input.walk_forward    = kbstate[SDL_SCANCODE_W     ];// || kbstate[SDL_SCANCODE_UP   ];
-    input.walk_backward   = kbstate[SDL_SCANCODE_S     ];// || kbstate[SDL_SCANCODE_DOWN ];
-    input.walk_up         = kbstate[SDL_SCANCODE_Q     ];
-    input.walk_down       = kbstate[SDL_SCANCODE_E     ];
-    input.turn_left       = kbstate[SDL_SCANCODE_LEFT  ];
-    input.turn_right      = kbstate[SDL_SCANCODE_RIGHT ];
-    input.turn_up         = kbstate[SDL_SCANCODE_UP    ];
-    input.turn_down       = kbstate[SDL_SCANCODE_DOWN  ];
-    input.rotate_right    = kbstate[SDL_SCANCODE_KP_PLUS ];
-    input.rotate_left     = kbstate[SDL_SCANCODE_KP_MINUS];
-    input.increase_voxel_scale_y = kbstate[SDL_SCANCODE_J];
-    input.decrease_voxel_scale_y = kbstate[SDL_SCANCODE_K];
-	input.increase_voxel_scale_x = kbstate[SDL_SCANCODE_U];
-	input.decrease_voxel_scale_x = kbstate[SDL_SCANCODE_I];
-    input.increase_voxel_gap = kbstate[SDL_SCANCODE_N];
-    input.decrease_voxel_gap = kbstate[SDL_SCANCODE_M];
-	input.speed_up        = kbstate[SDL_SCANCODE_F];
-	input.speed_down      = kbstate[SDL_SCANCODE_R];
-	input.f1              = kbstate[SDL_SCANCODE_F1];
-	input.f11             = kbstate[SDL_SCANCODE_F11];
-	input.alt = kbstate[SDL_SCANCODE_LALT];
-	input.enter = kbstate[SDL_SCANCODE_RETURN];
-	input.change_view = kbstate[SDL_SCANCODE_C];
-	input.change_waving = kbstate[SDL_SCANCODE_P];
+    input.walk_left              = kbstate[SDL_SCANCODE_A       ];// || kbstate[SDL_SCANCODE_LEFT ];
+    input.walk_right             = kbstate[SDL_SCANCODE_D       ];// || kbstate[SDL_SCANCODE_RIGHT];
+    input.walk_forward           = kbstate[SDL_SCANCODE_W       ];// || kbstate[SDL_SCANCODE_UP   ];
+    input.walk_backward          = kbstate[SDL_SCANCODE_S       ];// || kbstate[SDL_SCANCODE_DOWN ];
+    input.walk_up                = kbstate[SDL_SCANCODE_Q       ];
+    input.walk_down              = kbstate[SDL_SCANCODE_E       ];
+    input.turn_left              = kbstate[SDL_SCANCODE_LEFT    ];
+    input.turn_right             = kbstate[SDL_SCANCODE_RIGHT   ];
+    input.turn_up                = kbstate[SDL_SCANCODE_UP      ];
+    input.turn_down              = kbstate[SDL_SCANCODE_DOWN    ];
+    input.rotate_right           = kbstate[SDL_SCANCODE_KP_PLUS ];
+    input.rotate_left            = kbstate[SDL_SCANCODE_KP_MINUS];
+    input.swap_voxels_to_pixels = kbstate[SDL_SCANCODE_O       ];
+    input.increase_voxel_scale_y = kbstate[SDL_SCANCODE_J       ];
+    input.decrease_voxel_scale_y = kbstate[SDL_SCANCODE_K       ];
+	input.increase_voxel_scale_x = kbstate[SDL_SCANCODE_U       ];
+	input.decrease_voxel_scale_x = kbstate[SDL_SCANCODE_I       ];
+    input.increase_voxel_gap     = kbstate[SDL_SCANCODE_N       ];
+    input.decrease_voxel_gap     = kbstate[SDL_SCANCODE_M       ];
+	input.speed_up               = kbstate[SDL_SCANCODE_F       ];
+	input.speed_down             = kbstate[SDL_SCANCODE_R       ];
+	input.f1                     = kbstate[SDL_SCANCODE_F1      ];
+	input.f11                    = kbstate[SDL_SCANCODE_F11     ];
+	input.alt                    = kbstate[SDL_SCANCODE_LALT    ];
+	input.enter                  = kbstate[SDL_SCANCODE_RETURN  ];
+	input.change_view            = kbstate[SDL_SCANCODE_C       ];
+	input.change_waving          = kbstate[SDL_SCANCODE_P       ];
 }
 
 #ifdef WIN32
