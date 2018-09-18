@@ -59,7 +59,7 @@ namespace ty {
 		}
 
 		void Turn(CameraDirection direction, double dt) {
-			double velocity = movement_speed * dt * 0.001;
+			double velocity = movement_speed * dt * 0.003;
 			switch (direction) {
 				case CameraDirection::LEFT:
 					camera_pitch += velocity;

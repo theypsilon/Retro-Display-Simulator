@@ -606,10 +606,10 @@ void read_input(Input& input, bool& loop) {
     input.turn_down       = kbstate[SDL_SCANCODE_DOWN  ];
     input.rotate_right    = kbstate[SDL_SCANCODE_KP_PLUS ];
     input.rotate_left     = kbstate[SDL_SCANCODE_KP_MINUS];
-    input.increase_voxel_scale_x = kbstate[SDL_SCANCODE_J];
-    input.decrease_voxel_scale_x = kbstate[SDL_SCANCODE_K];
-	input.increase_voxel_scale_y = kbstate[SDL_SCANCODE_U];
-	input.decrease_voxel_scale_y = kbstate[SDL_SCANCODE_I];
+    input.increase_voxel_scale_y = kbstate[SDL_SCANCODE_J];
+    input.decrease_voxel_scale_y = kbstate[SDL_SCANCODE_K];
+	input.increase_voxel_scale_x = kbstate[SDL_SCANCODE_U];
+	input.decrease_voxel_scale_x = kbstate[SDL_SCANCODE_I];
     input.increase_voxel_gap = kbstate[SDL_SCANCODE_N];
     input.decrease_voxel_gap = kbstate[SDL_SCANCODE_M];
 	input.speed_up        = kbstate[SDL_SCANCODE_F];
