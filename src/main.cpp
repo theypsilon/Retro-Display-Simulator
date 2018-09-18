@@ -17,6 +17,7 @@
 
 #include <cstdio>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 #include <iostream>
 #include <chrono>
@@ -37,19 +38,19 @@ struct Resources {
     SDL_Window* window;
     unsigned int ticks;
     Uint32 last_time;
-    Shader lightingShader;
+    Shader lighting_shader;
 	ty::Camera camera;
 	float camera_zoom;
-    unsigned int cubeVAO;
-    int width, height;
+    unsigned int cube_vao;
+    int image_width, image_height;
     int last_mouse_x, last_mouse_y;
-    float cur_voxel_gap;
-    float min_voxel_gap;
+    float cur_voxel_scale_x;
+    float cur_voxel_scale_y;
     bool full_screen;
 	float voxels_pulse;
 	GLuint info_texture;
-	unsigned int infoVAO;
-	Shader infoShader;
+	unsigned int info_vao;
+	Shader info_shader;
     float info_mixer;
     bool showing_info;
 	bool showing_waves;
@@ -73,8 +74,10 @@ struct Input {
 		turn_right = false,
         rotate_left = false,
         rotate_right = false,
-		spread_voxels = false,
-		collapse_voxels = false,
+		spread_voxels_y = false,
+		collapse_voxels_y = false,
+		spread_voxels_x = false,
+		collapse_voxels_x = false,
 		mouse_click_left = false,
 		f1 = false,
 		f11 = false,
@@ -102,9 +105,26 @@ void update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
 void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
+const char* const images[] = {
+	"resources/textures/snes2.png",
+	"resources/textures/snes3.png",
+	"resources/textures/snes4.png",
+	"resources/textures/snes.png",
+	"resources/textures/seikendensetsu1.png",
+	"resources/textures/voxel_chronotrigger1.png",
+//	"resources/textures/voxe_supermarioworld1.jpg"
+};
+
+auto images_size = sizeof(images) / sizeof(images[0]);
+
 int main(int argc, char* argv[]) {
-	std::cout << __func__ << std::endl;
-    const auto path = FileSystem::getPath(argc > 1 ? std::string{argv[1]} : "resources/textures/snes3.png");
+	std::srand(std::time(nullptr));
+	auto image = images[std::rand() % images_size];
+	if (argc > 1) {
+		image = argv[1];
+	}
+	std::cout << "Playing image '" << image << "'.\n";
+    const auto path = FileSystem::getPath(image);
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
         return -1;
@@ -149,6 +169,8 @@ int main(int argc, char* argv[]) {
 #ifdef WIN32
 	windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT);
 #endif
+
+	SDL_WarpMouseInWindow(main_window, SCR_WIDTH / 2, SCR_HEIGHT / 2);
 
     auto glContext = SDL_GL_CreateContext(main_window);
     if (glContext == nullptr) {
@@ -200,23 +222,23 @@ int main(int argc, char* argv[]) {
 
 
 Resources load_resources(SDL_Window* window, const std::string& path) {
-    int width, height, nrChannels;
+    int image_width, image_height, image_nr_channels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
-    unsigned char *data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
-    std::cout << "Will load instances: " << (width * height) << ", Size: " << (width * height * 16) << std::endl;
-    std::vector<glm::vec4> colors(width * height);
+    unsigned char *data = stbi_load(path.c_str(), &image_width, &image_height, &image_nr_channels, 0);
+    std::cout << "Will load instances: " << (image_width * image_height) << ", Size: " << (image_width * image_height * 16) << std::endl;
+    std::vector<glm::vec4> colors(image_width * image_height);
     if (data) {
-        std::cout << "width: " << width << ", height: " << height << ", nrChannels: " << nrChannels << std::endl;
+        std::cout << "width: " << image_width << ", height: " << image_height << ", nrChannels: " << image_nr_channels << std::endl;
         int index = 0;
-        for (int j = 0; j < height; j++) {
-            for (int i = 0; i < width; i++) {
-                colors[j * width + i] = glm::vec4{
+        for (int j = 0; j < image_height; j++) {
+            for (int i = 0; i < image_width; i++) {
+                colors[j * image_width + i] = glm::vec4{
                     ((float) data[index + 0]) / 255.0f, 
                     ((float) data[index + 1]) / 255.0f,
                     ((float) data[index + 2]) / 255.0f,
                     ((float) data[index + 3]) / 255.0f
                 };
-                index += nrChannels;
+                index += image_nr_channels;
             }
         }
 		stbi_image_free(data);
@@ -226,7 +248,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 	int info_width, info_height, info_nr_channels;
 	GLuint info_texture;
 	data = stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
-	unsigned int infoVAO;
+	unsigned int info_vao;
 	if (data) {
 		float vertices[] = {
 			// positions          // colors           // texture coords
@@ -239,17 +261,17 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 			0, 1, 3, // first triangle
 			1, 2, 3  // second triangle
 		};
-		unsigned int VBO, EBO;
-        glGenVertexArrays(1, &infoVAO);
-        glGenBuffers(1, &VBO);
-        glGenBuffers(1, &EBO);
+		unsigned int vbo, ebo;
+        glGenVertexArrays(1, &info_vao);
+        glGenBuffers(1, &vbo);
+        glGenBuffers(1, &ebo);
 
-		glBindVertexArray(infoVAO);
+		glBindVertexArray(info_vao);
 
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 		// position attribute
@@ -278,35 +300,38 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 	} else {
 		std::cout << "Failed to load info texture" << std::endl;
 	}
-    float gap = 1.0f;
-    float half_width = float(width) / 2.0f * gap * snes_factor_horizontal;
-    float half_height = float(height) / 2.0f * gap;
+    float voxel_scale = 1.0f;
+    float half_width = float(image_width) / 2.0f * voxel_scale * snes_factor_horizontal;
+    float half_height = float(image_height) / 2.0f * voxel_scale;
 
-    std::vector<glm::vec2> offsets(width * height);
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
-            float x = i * gap * snes_factor_horizontal - half_width;
-            float y = j * gap - half_height;
-            offsets[j * width + i] = glm::vec2(x, y);
+	int offset_multiplier = 1;
+
+    std::vector<glm::vec2> offsets(image_width * image_height);
+    for (int j = 0; j < image_height; j++) {
+        for (int i = 0; i < image_width; i++) {
+            float x = i * voxel_scale * snes_factor_horizontal - half_width;
+            float y = j * voxel_scale - half_height;
+            offsets[j * image_width + i] = glm::vec2(x * offset_multiplier, y * offset_multiplier);
         }
     }
-
+#define VOXEL_MODE
     float vertices[] = {
         // cube coordinates                                           cube normals
+#ifdef VOXEL_MODE
         -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
          0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
          0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
          0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
         -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
         -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-
+#endif
         -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
          0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
          0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
          0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
         -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
         -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-
+#ifdef VOXEL_MODE
         -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
         -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
         -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
@@ -333,16 +358,17 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
          0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
          0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
         -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f
+        -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+#endif
     };
 
-    unsigned int VAO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
+    unsigned int vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
 
-    unsigned int geometryVBO;
-    glGenBuffers(1, &geometryVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, geometryVBO);
+    unsigned int voxel_vbo;
+    glGenBuffers(1, &voxel_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, voxel_vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // position attribute
@@ -353,10 +379,10 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glEnableVertexAttribArray(1);
 
 
-    unsigned int colorsVBO;
-    glGenBuffers(1, &colorsVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, colorsVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * width * height, colors.data(), GL_STATIC_DRAW);
+    unsigned int colors_vbo;
+    glGenBuffers(1, &colors_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
 
     // color attribute
     glEnableVertexAttribArray(2);
@@ -364,10 +390,10 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glVertexAttribDivisor(2, 1);
 
 
-    unsigned int offsetsVBO;
-    glGenBuffers(1, &offsetsVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, offsetsVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * width * height, offsets.data(), GL_STATIC_DRAW);
+    unsigned int offsets_vbo;
+    glGenBuffers(1, &offsets_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, offsets_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * image_width * image_height, offsets.data(), GL_STATIC_DRAW);
 
     // offset attribute
     glEnableVertexAttribArray(3);
@@ -377,36 +403,36 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
     glBindVertexArray(0);
 
     // be sure to activate shader when setting uniforms/drawing objects
-    Shader lightingShader{
-        FileSystem::getPath("resources/shaders/vertex.glsl").c_str(),
-        FileSystem::getPath("resources/shaders/frags.glsl").c_str()
+    Shader lighting_shader{
+        FileSystem::getPath("resources/shaders/voxel.vs").c_str(),
+        FileSystem::getPath("resources/shaders/voxel.fs").c_str()
     };
-	Shader infoShader{
-		FileSystem::getPath("resources/shaders/info_vertex.glsl").c_str(),
-		FileSystem::getPath("resources/shaders/info_frags.glsl").c_str()
+	Shader info_shader{
+		FileSystem::getPath("resources/shaders/info_panel.vs").c_str(),
+		FileSystem::getPath("resources/shaders/info_panel.fs").c_str()
 	};
 	ty::Camera camera{};
 	camera.movement_speed *= 5;
-	camera.SetPosition(glm::vec3{ 0.0f, 0.0f, 270.0f });
+	camera.SetPosition(glm::vec3{ 0.0f, 0.0f, 270.0f * offset_multiplier });
     return Resources {
         window,
         0,
         0,
-        std::move(lightingShader),
+        std::move(lighting_shader),
 		std::move(camera),
 		45.0f,
-        VAO,
-        width,
-        height,
+        vao,
+        image_width,
+        image_height,
         -1,
         -1,
-        1.0f,
-        1.0f,
+        0.0f,
+        0.0f,
         false,
 		0.0f,
 		info_texture,
-		infoVAO,
-		std::move(infoShader),
+		info_vao,
+		std::move(info_shader),
         0,
         true
     };
@@ -453,12 +479,19 @@ void update(const Input& input, Resources& res, float delta_time) {
     if (res.camera.movement_speed < 0.1)
         res.camera.movement_speed = 0.1f;
 
-    if (input.spread_voxels)
-        res.cur_voxel_gap += 0.005f * delta_time * res.camera.movement_speed;
-    if (input.collapse_voxels)
-        res.cur_voxel_gap -= 0.005f * delta_time * res.camera.movement_speed;
-    if (res.cur_voxel_gap <= res.min_voxel_gap)
-        res.cur_voxel_gap = res.min_voxel_gap;
+    if (input.spread_voxels_x)
+        res.cur_voxel_scale_x += 0.005f * delta_time * res.camera.movement_speed;
+    if (input.collapse_voxels_x)
+        res.cur_voxel_scale_x -= 0.005f * delta_time * res.camera.movement_speed;
+    if (res.cur_voxel_scale_x <= 0)
+        res.cur_voxel_scale_x = 0;
+
+	if (input.spread_voxels_y)
+		res.cur_voxel_scale_y += 0.005f * delta_time * res.camera.movement_speed;
+	if (input.collapse_voxels_y)
+		res.cur_voxel_scale_y -= 0.005f * delta_time * res.camera.movement_speed;
+	if (res.cur_voxel_scale_y <= 0)
+		res.cur_voxel_scale_y = 0;
 
     if (input.turn_up      ) res.camera.Turn(ty::CameraDirection::UP, delta_time);
     if (input.turn_down    ) res.camera.Turn(ty::CameraDirection::DOWN, delta_time);
@@ -494,11 +527,15 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.last_mouse_y = -1;
     }
 
-    auto width = res.width;
-    auto height = res.height;
-    float gap_value = res.cur_voxel_gap;
+    auto width = res.image_width;
+    auto height = res.image_height;
+	auto voxel_scale = glm::vec3{
+        res.cur_voxel_scale_x + 1,
+        res.cur_voxel_scale_y + 1,
+        (res.cur_voxel_scale_x + res.cur_voxel_scale_y)/2 + 1
+    };
 
-    glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 1.0f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.info_mixer += delta_time * 0.1f;
@@ -513,24 +550,24 @@ void update(const Input& input, Resources& res, float delta_time) {
 	glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    res.lightingShader.use();
-	res.lightingShader.setFloat("pulse", res.voxels_pulse * 7);
-    res.lightingShader.setFloat("ambientStrength", 0.5f);
-    res.lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
-    res.lightingShader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
-    res.lightingShader.setMat4("projection", projection);
-    res.lightingShader.setMat4("view", view);
-    res.lightingShader.setVec2("gap", glm::vec2{gap_value, gap_value});
+    res.lighting_shader.use();
+	res.lighting_shader.setFloat("pulse", res.voxels_pulse * 7);
+    res.lighting_shader.setFloat("ambientStrength", 0.5f);
+    res.lighting_shader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
+    res.lighting_shader.setVec3("lightPos", glm::vec3{width / 2, height / 2, 400.0f});
+    res.lighting_shader.setMat4("projection", projection);
+    res.lighting_shader.setMat4("view", view);
+	res.lighting_shader.setVec3("voxel_scale", voxel_scale);
 
     // world transformation
-    glBindVertexArray(res.cubeVAO);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.width * res.height);
+    glBindVertexArray(res.cube_vao);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.image_width * res.image_height);
 
     if (res.showing_info) {
         glBindTexture(GL_TEXTURE_2D, res.info_texture);
-        res.infoShader.use();
-        res.infoShader.setFloat("mixer", res.info_mixer);
-        glBindVertexArray(res.infoVAO);
+        res.info_shader.use();
+        res.info_shader.setFloat("mixer", res.info_mixer);
+        glBindVertexArray(res.info_vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     }
 }
@@ -538,10 +575,11 @@ void update(const Input& input, Resources& res, float delta_time) {
 void read_input(Input& input, bool& loop) {
 	SDL_PumpEvents();
 
-	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT);
-
-    const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+	const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
 	loop = kbstate[SDL_SCANCODE_ESCAPE] == false && SDL_QuitRequested() == false;
+
+	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT) || kbstate[SDL_SCANCODE_SPACE];
+
     input.walk_left       = kbstate[SDL_SCANCODE_A     ];// || kbstate[SDL_SCANCODE_LEFT ];
     input.walk_right      = kbstate[SDL_SCANCODE_D     ];// || kbstate[SDL_SCANCODE_RIGHT];
     input.walk_forward    = kbstate[SDL_SCANCODE_W     ];// || kbstate[SDL_SCANCODE_UP   ];
@@ -554,8 +592,10 @@ void read_input(Input& input, bool& loop) {
     input.turn_down       = kbstate[SDL_SCANCODE_DOWN  ];
     input.rotate_right    = kbstate[SDL_SCANCODE_KP_PLUS ];
     input.rotate_left     = kbstate[SDL_SCANCODE_KP_MINUS];
-    input.spread_voxels   = kbstate[SDL_SCANCODE_J     ];
-    input.collapse_voxels = kbstate[SDL_SCANCODE_K     ];
+    input.spread_voxels_x   = kbstate[SDL_SCANCODE_J     ];
+    input.collapse_voxels_x = kbstate[SDL_SCANCODE_K     ];
+	input.spread_voxels_y = kbstate[SDL_SCANCODE_U];
+	input.collapse_voxels_y = kbstate[SDL_SCANCODE_I];
 	input.speed_up        = kbstate[SDL_SCANCODE_F];
 	input.speed_down      = kbstate[SDL_SCANCODE_R];
 	input.f1              = kbstate[SDL_SCANCODE_F1];
@@ -610,10 +650,13 @@ void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int&
 		SDL_Log("called SetProcessDPIAware: %d", result ? 1 : 0);
 	}
 
+	if (!result) {
+		return;
+	}
 
 	auto monitor_from_window = (HMONITOR(WINAPI *)(HWND, DWORD)) SDL_LoadFunction(userDLL, "MonitorFromWindow");
 	auto get_monitor_info = (BOOL(WINAPI *)(HMONITOR, LPMONITORINFOEX)) SDL_LoadFunction(userDLL, "GetMonitorInfoA");
-	if (!monitor_from_window || !get_monitor_info || !result) {
+	if (!monitor_from_window || !get_monitor_info) {
 		return;
 	}
 
@@ -628,6 +671,7 @@ void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int&
 		width = real_width;
 		height = real_height;
 		SDL_SetWindowSize(window, width, height);
+		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
 	}
 }
 #endif

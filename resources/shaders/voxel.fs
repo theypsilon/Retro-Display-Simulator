@@ -11,10 +11,6 @@ uniform vec3 lightColor;
 
 void main()
 {
-    if (ObjectColor.a == 0.0) {
-        discard;
-    }
-    
     // ambient
     vec3 ambient = ambientStrength * lightColor;
   	

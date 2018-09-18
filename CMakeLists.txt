@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if (WIN32)
+	set(FORCE_STATIC_VCRT ON)
 	set(SDL2_DIR $ENV{SDLDIR})
 endif()
 
@@ -30,11 +31,19 @@ set(LIBS ${LIBS} "${SDL2_LIBRARIES}")
 
 set(SRCS ${SRCS} "src/main.cpp")
 if (WIN32)
-	add_executable(retro-voxel-display ${SRCS})
+	add_executable(retro-voxel-display WIN32 ${SRCS})
 	add_custom_command(TARGET retro-voxel-display POST_BUILD
      COMMAND ${CMAKE_COMMAND} -E copy_if_different
          "${SDL2_DIR}/lib/x64/SDL2.dll"
          $<TARGET_FILE_DIR:retro-voxel-display>)
+	add_custom_command(TARGET retro-voxel-display POST_BUILD
+     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+         "${SDL2_DIR}/lib/x64/SDL2.dll"
+         ${CMAKE_SOURCE_DIR})
+	add_custom_command(TARGET retro-voxel-display POST_BUILD
+     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+         ${CMAKE_CURRENT_BINARY_DIR}/retro-voxel-display.exe
+         ${CMAKE_SOURCE_DIR})
 else()
 	add_executable(retro-voxel-display ${SRCS})
 endif()
