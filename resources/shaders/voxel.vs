@@ -10,6 +10,7 @@ out vec4 ObjectColor;
 
 uniform mat4 view;
 uniform mat4 projection;
+uniform vec2 voxel_gap;
 uniform vec3 voxel_scale;
 uniform float pulse;
 
@@ -17,7 +18,7 @@ void main()
 {
 	float radius = length(aOffset);
 	ObjectColor = aColor;
-    FragPos = aPos / voxel_scale + vec3(aOffset, 0) + vec3(0, 0, sin(pulse + sin(pulse / 10) * radius / 4) * 2);
+    FragPos = aPos / voxel_scale + vec3(aOffset * voxel_gap, 0) + vec3(0, 0, sin(pulse + sin(pulse / 10) * radius / 4) * 2);
     Normal = aNormal;  
     
     gl_Position = projection * view * vec4(FragPos, 1.0);

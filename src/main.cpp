@@ -46,6 +46,7 @@ struct Resources {
     int last_mouse_x, last_mouse_y;
     float cur_voxel_scale_x;
     float cur_voxel_scale_y;
+    float cur_voxel_gap;
     bool full_screen;
 	float voxels_pulse;
 	GLuint info_texture;
@@ -74,10 +75,12 @@ struct Input {
 		turn_right = false,
         rotate_left = false,
         rotate_right = false,
-		spread_voxels_y = false,
-		collapse_voxels_y = false,
-		spread_voxels_x = false,
-		collapse_voxels_x = false,
+		increase_voxel_scale_y = false,
+		decrease_voxel_scale_y = false,
+		increase_voxel_scale_x = false,
+		decrease_voxel_scale_x = false,
+        increase_voxel_gap = false,
+        decrease_voxel_gap = false,
 		mouse_click_left = false,
 		f1 = false,
 		f11 = false,
@@ -428,6 +431,7 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
         -1,
         0.0f,
         0.0f,
+        0.0f,
         false,
 		0.0f,
 		info_texture,
@@ -479,19 +483,26 @@ void update(const Input& input, Resources& res, float delta_time) {
     if (res.camera.movement_speed < 0.1)
         res.camera.movement_speed = 0.1f;
 
-    if (input.spread_voxels_x)
+    if (input.increase_voxel_scale_x)
         res.cur_voxel_scale_x += 0.005f * delta_time * res.camera.movement_speed;
-    if (input.collapse_voxels_x)
+    if (input.decrease_voxel_scale_x)
         res.cur_voxel_scale_x -= 0.005f * delta_time * res.camera.movement_speed;
     if (res.cur_voxel_scale_x <= 0)
         res.cur_voxel_scale_x = 0;
 
-	if (input.spread_voxels_y)
+	if (input.increase_voxel_scale_y)
 		res.cur_voxel_scale_y += 0.005f * delta_time * res.camera.movement_speed;
-	if (input.collapse_voxels_y)
+	if (input.decrease_voxel_scale_y)
 		res.cur_voxel_scale_y -= 0.005f * delta_time * res.camera.movement_speed;
 	if (res.cur_voxel_scale_y <= 0)
 		res.cur_voxel_scale_y = 0;
+
+    if (input.increase_voxel_gap)
+        res.cur_voxel_gap += 0.005f * delta_time * res.camera.movement_speed;
+    if (input.decrease_voxel_gap)
+        res.cur_voxel_gap -= 0.005f * delta_time * res.camera.movement_speed;
+    if (res.cur_voxel_gap <= 0)
+        res.cur_voxel_gap = 0;
 
     if (input.turn_up      ) res.camera.Turn(ty::CameraDirection::UP, delta_time);
     if (input.turn_down    ) res.camera.Turn(ty::CameraDirection::DOWN, delta_time);
@@ -532,8 +543,10 @@ void update(const Input& input, Resources& res, float delta_time) {
 	auto voxel_scale = glm::vec3{
         res.cur_voxel_scale_x + 1,
         res.cur_voxel_scale_y + 1,
-        (res.cur_voxel_scale_x + res.cur_voxel_scale_y)/2 + 1
+        (res.cur_voxel_scale_x + res.cur_voxel_scale_x)/2 + 1
     };
+
+    auto voxel_gap = glm::vec2{1 + res.cur_voxel_gap, 1 + res.cur_voxel_gap};
 
     glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 1.0f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
@@ -558,6 +571,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     res.lighting_shader.setMat4("projection", projection);
     res.lighting_shader.setMat4("view", view);
 	res.lighting_shader.setVec3("voxel_scale", voxel_scale);
+    res.lighting_shader.setVec2("voxel_gap", voxel_gap);
 
     // world transformation
     glBindVertexArray(res.cube_vao);
@@ -592,10 +606,12 @@ void read_input(Input& input, bool& loop) {
     input.turn_down       = kbstate[SDL_SCANCODE_DOWN  ];
     input.rotate_right    = kbstate[SDL_SCANCODE_KP_PLUS ];
     input.rotate_left     = kbstate[SDL_SCANCODE_KP_MINUS];
-    input.spread_voxels_x   = kbstate[SDL_SCANCODE_J     ];
-    input.collapse_voxels_x = kbstate[SDL_SCANCODE_K     ];
-	input.spread_voxels_y = kbstate[SDL_SCANCODE_U];
-	input.collapse_voxels_y = kbstate[SDL_SCANCODE_I];
+    input.increase_voxel_scale_x = kbstate[SDL_SCANCODE_J];
+    input.decrease_voxel_scale_x = kbstate[SDL_SCANCODE_K];
+	input.increase_voxel_scale_y = kbstate[SDL_SCANCODE_U];
+	input.decrease_voxel_scale_y = kbstate[SDL_SCANCODE_I];
+    input.increase_voxel_gap = kbstate[SDL_SCANCODE_N];
+    input.decrease_voxel_gap = kbstate[SDL_SCANCODE_M];
 	input.speed_up        = kbstate[SDL_SCANCODE_F];
 	input.speed_down      = kbstate[SDL_SCANCODE_R];
 	input.f1              = kbstate[SDL_SCANCODE_F1];
