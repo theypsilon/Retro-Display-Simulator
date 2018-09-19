@@ -47,6 +47,13 @@
 	} \
 }
 
+#define TRY_TRUE(expr, ...) { \
+	auto _true = expr; \
+	if (!_true) { \
+		return ty::error{TY_INTERNAL_FILE_CTX + "Error, result is false. " + std::string(__VA_ARGS__)}; \
+	} \
+}
+
 #define TRY_GL_ERROR { \
 	auto _gl_err = glGetError(); \
 	if (_gl_err != GL_NO_ERROR) { \

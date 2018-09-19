@@ -183,8 +183,8 @@ ty::result<InfoResources> load_info_resources();
 ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height);
 ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo);
 ty::error update(const Input& input, Resources& res, float delta_time);
-void read_input(Input& input, bool& loop);
-void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
+ty::error read_input(Input& input, bool& loop);
+ty::error windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
 const AnimationPaths animation_collection[] = {
 	AnimationPaths{{"resources/textures/snes2.png"}},
@@ -271,7 +271,7 @@ ty::error program(int argc, char* argv[]) {
 	));
 
 #ifdef WIN32
-	windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT);
+	TRY_ERROR(windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT));
 #endif
 
 	SDL_WarpMouseInWindow(main_window, SCR_WIDTH / 2, SCR_HEIGHT / 2);
@@ -303,7 +303,7 @@ ty::error program(int argc, char* argv[]) {
 		delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
 		last_time = current_time;
 
-		read_input(input, loop);
+		TRY_ERROR(read_input(input, loop);
 		TRY_ERROR(update(input, res, delta_time));
 
 		SDL_GL_SwapWindow(main_window);
@@ -703,10 +703,10 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 	RETURN_OK;
 }
 
-void read_input(Input& input, bool& loop) {
+ty::error read_input(Input& input, bool& loop) {
 	SDL_PumpEvents();
 
-	const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+	TRY_NOTNULL(const Uint8 *, kbstate, SDL_GetKeyboardState(NULL));
 	loop = kbstate[SDL_SCANCODE_ESCAPE] == false && SDL_QuitRequested() == false;
 
 	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT) || kbstate[SDL_SCANCODE_SPACE];
@@ -738,16 +738,17 @@ void read_input(Input& input, bool& loop) {
 	input.enter                  = kbstate[SDL_SCANCODE_RETURN  ];
 	input.change_view            = kbstate[SDL_SCANCODE_C       ];
 	input.change_waving          = kbstate[SDL_SCANCODE_P       ];
+	RETURN_OK;
 }
 
 #ifdef WIN32
 #include <cassert>
 #include "SDL_syswm.h"
-void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height) {
+ty::error windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height) {
 
 	SDL_SysWMinfo sys_wm_info;
 	SDL_VERSION(&sys_wm_info.version);
-	SDL_GetWindowWMInfo(window, &sys_wm_info);
+	TRY_TRUE(SDL_GetWindowWMInfo(window, &sys_wm_info));
 
 	typedef enum PROCESS_DPI_AWARENESS {
 		PROCESS_DPI_UNAWARE = 0,
@@ -785,13 +786,13 @@ void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int&
 	}
 
 	if (!result) {
-		return;
+		RETURN_OK;
 	}
 
 	auto monitor_from_window = (HMONITOR(WINAPI *)(HWND, DWORD)) SDL_LoadFunction(userDLL, "MonitorFromWindow");
 	auto get_monitor_info = (BOOL(WINAPI *)(HMONITOR, LPMONITORINFOEX)) SDL_LoadFunction(userDLL, "GetMonitorInfoA");
 	if (!monitor_from_window || !get_monitor_info) {
-		return;
+		RETURN_OK;
 	}
 
 	auto hMonitor = monitor_from_window(sys_wm_info.info.win.window, MONITOR_DEFAULTTOPRIMARY);
@@ -806,5 +807,7 @@ void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int&
 		height = real_height;
 		SDL_SetWindowSize(window, width, height);
 	}
+
+	RETURN_OK;
 }
 #endif
