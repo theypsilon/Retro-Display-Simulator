@@ -35,9 +35,14 @@ struct InternalButtons {
 	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels;
 };
 
-struct ScreenAnimation {
-    std::vector<const char*> images;
+struct AnimationPaths {
+    std::vector<const char*> paths;
     int milliseconds = 100;
+};
+
+struct AnimationColors {
+	std::vector<std::vector<glm::vec4>> colors_by_image;
+	int milliseconds;
 };
 
 struct InfoResources {
@@ -59,7 +64,7 @@ struct Resources {
     unsigned int voxel_vao;
     unsigned int voxel_vbo;
     unsigned int colors_vbo;
-    ScreenAnimation animation;
+	AnimationColors animation_colors;
     int image_width, image_height;
     unsigned int image_counter, image_tick;
     int last_mouse_x, last_mouse_y;
@@ -173,19 +178,20 @@ unsigned int SCR_WIDTH  = 1920;
 unsigned int SCR_HEIGHT = 1080;
 
 ty::error program(int argc, char* argv[]);
-ty::result<Resources> load_resources(SDL_Window* window, const ScreenAnimation& animation);
+ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& animation_paths);
 ty::result<InfoResources> load_info_resources();
-ty::error load_image(const char* path, int& image_width, int& image_height, unsigned int colors_vbo);
+ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height);
+ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo);
 ty::error update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
 void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
-const ScreenAnimation animations[] = {
-	ScreenAnimation{{"resources/textures/snes2.png"}},
-	ScreenAnimation{{"resources/textures/snes3.png"}},
-	ScreenAnimation{{"resources/textures/snes4.png"}},
-	ScreenAnimation{{"resources/textures/snes.png"}},
-	ScreenAnimation{{
+const AnimationPaths animation_collection[] = {
+	AnimationPaths{{"resources/textures/snes2.png"}},
+	AnimationPaths{{"resources/textures/snes3.png"}},
+	AnimationPaths{{"resources/textures/snes4.png"}},
+	AnimationPaths{{"resources/textures/snes.png"}},
+	AnimationPaths{{
         "resources/textures/seikendensetsu1.png",
         "resources/textures/seikendensetsu2.png",
         "resources/textures/seikendensetsu3.png",
@@ -193,7 +199,7 @@ const ScreenAnimation animations[] = {
         "resources/textures/seikendensetsu5.png",
         "resources/textures/seikendensetsu6.png",
     }},
-	ScreenAnimation{{
+	AnimationPaths{{
         "resources/textures/voxel_chronotrigger1.png",
         "resources/textures/voxel_chronotrigger2.png",
         "resources/textures/voxel_chronotrigger3.png",
@@ -206,7 +212,7 @@ const ScreenAnimation animations[] = {
 //	"resources/textures/voxe_supermarioworld1.jpg"
 };
 
-auto animiations_size = sizeof(animations) / sizeof(animations[0]);
+auto animation_collection_size = sizeof(animation_collection) / sizeof(animation_collection[0]);
 
 int main(int argc, char* argv[]) {
 	auto err = program(argc, argv);
@@ -220,16 +226,14 @@ int main(int argc, char* argv[]) {
 
 
 ty::error program(int argc, char* argv[]) {
-	std::srand(std::time(nullptr));
-	auto animation = animations[std::rand() % animiations_size];
+	std::srand(std::time(nullptr));	
+	auto animation_paths = animation_collection[std::rand() % animation_collection_size];
 	if (argc > 1) {
-		animation = ScreenAnimation{ { argv[1] } };
+		animation_paths = AnimationPaths{ { argv[1] } };
 	}
-	std::cout << "Playing image '" << animation.images[0] << "'.\n";
-	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-		RETURN_ERROR("Failed to init SDL");
-	}
+	std::cout << "Playing image '" << animation_paths.paths[0] << "'.\n";
 
+	TRY_NONNEG(SDL_Init(SDL_INIT_VIDEO));
 	atexit(SDL_Quit);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -252,18 +256,14 @@ ty::error program(int argc, char* argv[]) {
 	}
 #endif
 
-	auto main_window = SDL_CreateWindow(
+	TRY_NOTNULL(auto, main_window, SDL_CreateWindow(
 		"Retro Voxel Display",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		SCR_WIDTH,
 		SCR_HEIGHT,
 		SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI
-	);
-
-	if (main_window == nullptr) {
-		RETURN_ERROR("Failed to create SDL Window");
-	}
+	));
 
 #ifdef WIN32
 	windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT);
@@ -271,14 +271,8 @@ ty::error program(int argc, char* argv[]) {
 
 	SDL_WarpMouseInWindow(main_window, SCR_WIDTH / 2, SCR_HEIGHT / 2);
 
-	auto glContext = SDL_GL_CreateContext(main_window);
-	if (glContext == nullptr) {
-		RETURN_ERROR("Failed to create OpenGL Context");
-	}
-
-	if (gladLoadGLLoader(SDL_GL_GetProcAddress) < 0) {
-		RETURN_ERROR("Failed to load OpenGL");
-	}
+	TRY_NOTNULL(auto, glContext, SDL_GL_CreateContext(main_window));
+	TRY_NONNEG(gladLoadGLLoader(SDL_GL_GetProcAddress))
 
 	GLint major, minor;
 	glGetIntegerv(GL_MAJOR_VERSION, &major);
@@ -289,14 +283,12 @@ ty::error program(int argc, char* argv[]) {
 	printf("GL Version (integer) : %d.%d\n", major, minor);
 	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-	if (SDL_GL_SetSwapInterval(1) < 0) {
-		RETURN_ERROR("Failed to set swap interval");
-	}
+	TRY_NONNEG(SDL_GL_SetSwapInterval(1));
 
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
 
-	TRY_RESULT(auto, res, load_resources(main_window, animation));
+	TRY_RESULT(auto, res, load_resources(main_window, animation_paths));
 	Input input;
 	bool loop = true;
 	float delta_time = 0.0f;
@@ -317,7 +309,7 @@ ty::error program(int argc, char* argv[]) {
 	RETURN_OK;
 }
 
-ty::result<Resources> load_resources(SDL_Window* window, const ScreenAnimation& animation) {
+ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& animation_paths) {
     int image_width, image_height, image_nr_channels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
 
@@ -337,10 +329,10 @@ ty::result<Resources> load_resources(SDL_Window* window, const ScreenAnimation& 
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-
     unsigned int colors_vbo;
     glGenBuffers(1, &colors_vbo);
-    TRY_ERROR(load_image(animation.images[0], image_width, image_height, colors_vbo));
+    TRY_RESULT(auto, colors_by_image, load_animation(animation_paths.paths, image_width, image_height));
+	TRY_ERROR(load_image_on_gpu(colors_by_image[0], image_width, image_height, colors_vbo));
 
     float voxel_scale = 1.0f;
     float half_width = float(image_width) / 2.0f * voxel_scale * snes_factor_horizontal;
@@ -400,7 +392,7 @@ ty::result<Resources> load_resources(SDL_Window* window, const ScreenAnimation& 
     res.voxel_vao = voxel_vao;
     res.voxel_vbo = voxel_vbo;
     res.colors_vbo = colors_vbo;
-    res.animation = animation;
+	res.animation_colors = AnimationColors{ std::move(colors_by_image), animation_paths.milliseconds };
     res.image_width = image_width;
     res.image_height = image_height;
     res.image_counter = 0;
@@ -491,30 +483,47 @@ ty::result<InfoResources> load_info_resources() {
 	return info_res;
 }
 
-ty::error load_image(const char* path, int& image_width, int& image_height, unsigned int colors_vbo) {
+ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height) {
 	int image_nr_channels;
-	TRY_NOTNULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &image_width, &image_height, &image_nr_channels, 0));
-	std::vector<glm::vec4> colors(image_width * image_height);
-	int index = 0;
-	for (int j = 0; j < image_height; j++) {
-		for (int i = 0; i < image_width; i++) {
-			colors[j * image_width + i] = glm::vec4{
-				((float)data[index + 0]) / 255.0f,
-				((float)data[index + 1]) / 255.0f,
-				((float)data[index + 2]) / 255.0f,
-				((float)data[index + 3]) / 255.0f
-			};
-			index += image_nr_channels;
+	image_width = -1, image_height = -1;
+	std::vector<std::vector<glm::vec4>> colors_by_image;
+	for (auto path : paths) {
+		int current_width, current_height;
+		TRY_NOTNULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &current_width, &current_height, &image_nr_channels, 0));
+		if (image_width == -1 && image_height == -1) {
+			image_width = current_width;
+			image_height = current_height;
+		} else if (image_width != current_width || image_height != current_height) {
+			RETURN_ERROR("width and height from image '" + path + "' does not match with the first image of the animation");
 		}
+		std::vector<glm::vec4> colors(image_width * image_height);
+		int index = 0;
+		for (int j = 0; j < image_height; j++) {
+			for (int i = 0; i < image_width; i++) {
+				colors[j * image_width + i] = glm::vec4{
+					((float)data[index + 0]) / 255.0f,
+					((float)data[index + 1]) / 255.0f,
+					((float)data[index + 2]) / 255.0f,
+					((float)data[index + 3]) / 255.0f
+				};
+				index += image_nr_channels;
+			}
+		}
+		stbi_image_free(data);
+
+		colors_by_image.emplace_back(std::move(colors));
 	}
-	stbi_image_free(data);
+	return colors_by_image;
+}
+
+ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo) {
 	glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
 
 	TRY_GL_ERROR;
+
 	RETURN_OK;
 }
-
 
 ty::error update(const Input& input, Resources& res, float delta_time) {
 	res.buttons.f11.track(input.f11);
@@ -534,15 +543,15 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
         res.ticks = 0;
     }
 
-    if (res.animation.images.size() > 1 && now > res.image_tick + res.animation.milliseconds) {
+    if (res.animation_colors.colors_by_image.size() > 1 && now > res.image_tick + res.animation_colors.milliseconds) {
         res.image_tick = now;
 
         res.image_counter++;
-        if (res.image_counter >= res.animation.images.size()) {
+        if (res.image_counter >= res.animation_colors.colors_by_image.size()) {
             res.image_counter = 0;
         }
 
-        TRY_ERROR(load_image(res.animation.images[res.image_counter], res.image_width, res.image_height, res.colors_vbo));
+        TRY_ERROR(load_image_on_gpu(res.animation_colors.colors_by_image[res.image_counter], res.image_width, res.image_height, res.colors_vbo));
     }
 
 	res.buttons.waving.track(input.change_waving);
@@ -674,13 +683,9 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 	res.lighting_shader.setVec3("voxel_scale", voxel_scale);
     res.lighting_shader.setVec2("voxel_gap", voxel_gap);
 
-	TRY_GL_ERROR;
-
     // world transformation
     glBindVertexArray(res.voxel_vao);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.image_width * res.image_height);
-	
-	TRY_GL_ERROR;
 
     if (res.info_panel.showing_info) {
         glBindTexture(GL_TEXTURE_2D, res.info_panel.info_texture);
@@ -688,8 +693,6 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
         res.info_panel.info_shader.setFloat("mixer", res.info_panel.info_mixer);
         glBindVertexArray(res.info_panel.info_vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-		TRY_GL_ERROR;
     }
 
 	RETURN_OK;
@@ -797,7 +800,6 @@ void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int&
 		width = real_width;
 		height = real_height;
 		SDL_SetWindowSize(window, width, height);
-		//SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
 	}
 }
 #endif
