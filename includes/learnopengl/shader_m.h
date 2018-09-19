@@ -4,19 +4,22 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
+#include <theypsilon/error.h>
+
 #include <string>
 #include <fstream>
 #include <sstream>
-#include <iostream>
 
 class Shader
 {
+	bool empty = true;
 public:
     unsigned int ID;
-    // constructor generates the shader on the fly
-    // ------------------------------------------------------------------------
-    Shader(const char* vertexPath, const char* fragmentPath)
-    {
+	Shader() = default;
+
+	static ty::result<Shader> load_shader(const char* vertexPath, const char* fragmentPath) {
+		Shader shader;
+		shader.empty = false;
         // 1. retrieve the vertex/fragment source code from filePath
         std::string vertexCode;
         std::string fragmentCode;
@@ -43,7 +46,7 @@ public:
         }
         catch (std::ifstream::failure e)
         {
-            std::cout << "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ" << std::endl;
+			RETURN_ERROR( "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ" );
         }
         const char* vShaderCode = vertexCode.c_str();
         const char * fShaderCode = fragmentCode.c_str();
@@ -55,28 +58,32 @@ public:
         vertex = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertex, 1, &vShaderCode, NULL);
         glCompileShader(vertex);
-        checkCompileErrors(vertex, "VERTEX");
+        TRY_ERROR(shader.checkCompileErrors(vertex, "VERTEX"));
         // fragment Shader
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragment, 1, &fShaderCode, NULL);
         glCompileShader(fragment);
-        checkCompileErrors(fragment, "FRAGMENT");
+        TRY_ERROR(shader.checkCompileErrors(fragment, "FRAGMENT"));
         // shader Program
-        ID = glCreateProgram();
-        glAttachShader(ID, vertex);
-        glAttachShader(ID, fragment);
-        glLinkProgram(ID);
-        checkCompileErrors(ID, "PROGRAM");
+        shader.ID = glCreateProgram();
+        glAttachShader(shader.ID, vertex);
+        glAttachShader(shader.ID, fragment);
+        glLinkProgram(shader.ID);
+        TRY_ERROR(shader.checkCompileErrors(shader.ID, "PROGRAM"));
         // delete the shaders as they're linked into our program now and no longer necessery
         glDeleteShader(vertex);
         glDeleteShader(fragment);
-
+		return shader;
     }
     // activate the shader
     // ------------------------------------------------------------------------
-    void use() const
+    ty::error use() const
     { 
-        glUseProgram(ID); 
+		if (empty) {
+			RETURN_ERROR("Trying to use empty shader!");
+		}
+        glUseProgram(ID);
+		RETURN_OK;
     }
     // utility uniform functions
     // ------------------------------------------------------------------------
@@ -140,7 +147,7 @@ public:
 private:
     // utility function for checking shader compilation/linking errors.
     // ------------------------------------------------------------------------
-    void checkCompileErrors(GLuint shader, std::string type)
+    ty::error checkCompileErrors(GLuint shader, std::string type)
     {
         GLint success;
         GLchar infoLog[1024];
@@ -150,7 +157,9 @@ private:
             if (!success)
             {
                 glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-                std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+				std::stringstream ss;
+                ss << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+				RETURN_ERROR( ss.str() );
             }
         }
         else
@@ -159,9 +168,12 @@ private:
             if (!success)
             {
                 glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-                std::cout << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+				std::stringstream ss;
+                ss << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+				RETURN_ERROR( ss.str() );
             }
         }
+		RETURN_OK;
     }
 };
 #endif

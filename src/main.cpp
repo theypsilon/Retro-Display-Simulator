@@ -14,6 +14,7 @@
 
 #include <theypsilon/camera.h>
 #include <theypsilon/boolean_button.h>
+#include <theypsilon/error.h>
 
 #include <cstdio>
 #include <cmath>
@@ -39,11 +40,20 @@ struct ScreenAnimation {
     int milliseconds = 100;
 };
 
+struct InfoResources {
+	GLuint info_texture;
+	unsigned int info_vao;
+	Shader info_shader;
+	float info_mixer;
+	bool showing_info;
+};
+
 struct Resources {
     SDL_Window* window;
     unsigned int ticks;
     Uint32 last_time;
     Shader lighting_shader;
+	InfoResources info_panel;
 	ty::Camera camera;
 	float camera_zoom;
     unsigned int voxel_vao;
@@ -51,18 +61,13 @@ struct Resources {
     unsigned int colors_vbo;
     ScreenAnimation animation;
     int image_width, image_height;
-    int image_counter, image_tick;
+    unsigned int image_counter, image_tick;
     int last_mouse_x, last_mouse_y;
     float cur_voxel_scale_x;
     float cur_voxel_scale_y;
     float cur_voxel_gap;
     bool full_screen;
 	float voxels_pulse;
-	GLuint info_texture;
-	unsigned int info_vao;
-	Shader info_shader;
-    float info_mixer;
-    bool showing_info;
 	bool showing_waves;
     bool showing_voxels;
 	InternalButtons buttons;
@@ -104,7 +109,6 @@ struct Input {
     int mouse_motion_x = -1;
     int mouse_motion_y = -1;
 };
-
 
 const long double ratio_4_3 = 4.0 / 3.0;
 const long double ratio_256_224 = 256.0 / 224.0;
@@ -168,8 +172,11 @@ const float square_geometry[] = {
 unsigned int SCR_WIDTH  = 1920;
 unsigned int SCR_HEIGHT = 1080;
 
-Resources load_resources(SDL_Window* window, const ScreenAnimation& animation);
-void update(const Input& input, Resources& res, float delta_time);
+ty::error program(int argc, char* argv[]);
+ty::result<Resources> load_resources(SDL_Window* window, const ScreenAnimation& animation);
+ty::result<InfoResources> load_info_resources();
+ty::error load_image(const char* path, int& image_width, int& image_height, unsigned int colors_vbo);
+ty::error update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
 void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
@@ -202,29 +209,39 @@ const ScreenAnimation animations[] = {
 auto animiations_size = sizeof(animations) / sizeof(animations[0]);
 
 int main(int argc, char* argv[]) {
+	auto err = program(argc, argv);
+	if (err) {
+		std::cerr << "Ooops! Something went wrong!\n[ERROR] " << err.msg << "\nClosing program in 10 seconds.\n";
+		SDL_Delay(10000);
+		return -1;
+	}
+	return 0;
+}
+
+
+ty::error program(int argc, char* argv[]) {
 	std::srand(std::time(nullptr));
 	auto animation = animations[std::rand() % animiations_size];
 	if (argc > 1) {
-		animation = ScreenAnimation{{argv[1]}};
+		animation = ScreenAnimation{ { argv[1] } };
 	}
 	std::cout << "Playing image '" << animation.images[0] << "'.\n";
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "Failed to init SDL\n";
-        return -1;
-    }
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+		RETURN_ERROR("Failed to init SDL");
+	}
 
-    atexit (SDL_Quit);
+	atexit(SDL_Quit);
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    //SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	//SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1); // This is MSAA on/off
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // This is MSAA number of sampling
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1); // This is MSAA on/off
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // This is MSAA number of sampling
 
 #ifndef WIN32
 	SDL_DisplayMode display_mode;
@@ -235,19 +252,18 @@ int main(int argc, char* argv[]) {
 	}
 #endif
 
-    auto main_window = SDL_CreateWindow(
-        "Retro Voxel Display", 
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        SCR_WIDTH,
-        SCR_HEIGHT,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI
-    );
+	auto main_window = SDL_CreateWindow(
+		"Retro Voxel Display",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		SCR_WIDTH,
+		SCR_HEIGHT,
+		SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI
+	);
 
-    if (main_window == nullptr) {
-        std::cerr << "Failed to create SDL Window\n";
-        return -1;
-    }
+	if (main_window == nullptr) {
+		RETURN_ERROR("Failed to create SDL Window");
+	}
 
 #ifdef WIN32
 	windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT);
@@ -255,138 +271,55 @@ int main(int argc, char* argv[]) {
 
 	SDL_WarpMouseInWindow(main_window, SCR_WIDTH / 2, SCR_HEIGHT / 2);
 
-    auto glContext = SDL_GL_CreateContext(main_window);
-    if (glContext == nullptr) {
-        std::cerr << "Failed to create OpenGL Context\n";
-        return -1;
-    }
+	auto glContext = SDL_GL_CreateContext(main_window);
+	if (glContext == nullptr) {
+		RETURN_ERROR("Failed to create OpenGL Context");
+	}
 
-    if (gladLoadGLLoader(SDL_GL_GetProcAddress) < 0) {
-        std::cerr << "Failed to load OpenGL\n";
-        return -1;
-    }
+	if (gladLoadGLLoader(SDL_GL_GetProcAddress) < 0) {
+		RETURN_ERROR("Failed to load OpenGL");
+	}
 
-    GLint major, minor;
-    glGetIntegerv(GL_MAJOR_VERSION, &major);
-    glGetIntegerv(GL_MINOR_VERSION, &minor);
-    printf("GL Vendor : %s\n", glGetString(GL_VENDOR));
-    printf("GL Renderer : %s\n", glGetString(GL_RENDERER));
-    printf("GL Version (string) : %s\n", glGetString(GL_VERSION));
-    printf("GL Version (integer) : %d.%d\n", major, minor);
-    printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+	GLint major, minor;
+	glGetIntegerv(GL_MAJOR_VERSION, &major);
+	glGetIntegerv(GL_MINOR_VERSION, &minor);
+	printf("GL Vendor : %s\n", glGetString(GL_VENDOR));
+	printf("GL Renderer : %s\n", glGetString(GL_RENDERER));
+	printf("GL Version (string) : %s\n", glGetString(GL_VERSION));
+	printf("GL Version (integer) : %d.%d\n", major, minor);
+	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-    if (SDL_GL_SetSwapInterval(1) < 0) {
-        std::cerr << "Failed to set swap interval\n";
-        return -1;
-    }
+	if (SDL_GL_SetSwapInterval(1) < 0) {
+		RETURN_ERROR("Failed to set swap interval");
+	}
 
-    glEnable(GL_MULTISAMPLE);  
-    glEnable(GL_DEPTH_TEST);
+	glEnable(GL_MULTISAMPLE);
+	glEnable(GL_DEPTH_TEST);
 
-    Input input;
-    Resources res = load_resources(main_window, animation);
+	TRY_RESULT(auto, res, load_resources(main_window, animation));
+	Input input;
+	bool loop = true;
+	float delta_time = 0.0f;
+	auto last_time = std::chrono::system_clock::now();
+	while (loop) {
+		auto current_time = std::chrono::system_clock::now();
+		delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
+		last_time = current_time;
 
-    bool loop = true;
-    float delta_time = 0.0f;
-    auto last_time = std::chrono::system_clock::now();
-    while (loop) {
-        auto current_time = std::chrono::system_clock::now();
-        delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
-        last_time = current_time;
+		read_input(input, loop);
+		TRY_ERROR(update(input, res, delta_time));
 
-        read_input(input, loop);
-        update(input, res, delta_time);
+		SDL_GL_SwapWindow(main_window);
 
-        SDL_GL_SwapWindow(main_window); 
-    }
+		TRY_GL_ERROR;
+	}
 
-    return 0;
+	RETURN_OK;
 }
 
-void load_image(const char* path, int& image_width, int& image_height, unsigned int colors_vbo) {
-    int image_nr_channels;
-    unsigned char *data = stbi_load(path, &image_width, &image_height, &image_nr_channels, 0);
-    std::vector<glm::vec4> colors(image_width * image_height);
-    if (data) {
-        int index = 0;
-        for (int j = 0; j < image_height; j++) {
-            for (int i = 0; i < image_width; i++) {
-                colors[j * image_width + i] = glm::vec4{
-                    ((float) data[index + 0]) / 255.0f, 
-                    ((float) data[index + 1]) / 255.0f,
-                    ((float) data[index + 2]) / 255.0f,
-                    ((float) data[index + 3]) / 255.0f
-                };
-                index += image_nr_channels;
-            }
-        }
-        stbi_image_free(data);
-    } else {
-        std::cout << "Failed to load target texture" << std::endl;
-    }
-    glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
-}
-
-
-Resources load_resources(SDL_Window* window, const ScreenAnimation& animation) {
+ty::result<Resources> load_resources(SDL_Window* window, const ScreenAnimation& animation) {
     int image_width, image_height, image_nr_channels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
-	int info_width, info_height, info_nr_channels;
-	GLuint info_texture;
-	auto data = stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
-	unsigned int info_vao;
-	if (data) {
-		float vertices_info[] = {
-			// positions          // colors           // texture coords
-			1.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
-			1.0f,  -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
-			0.75f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
-			0.75f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
-		};
-		unsigned int indices_info[] = {
-			0, 1, 3, // first triangle
-			1, 2, 3  // second triangle
-		};
-		unsigned int info_vbo, info_ebo;
-        glGenVertexArrays(1, &info_vao);
-        glGenBuffers(1, &info_vbo);
-        glGenBuffers(1, &info_ebo);
-
-		glBindVertexArray(info_vao);
-
-		glBindBuffer(GL_ARRAY_BUFFER, info_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_info), vertices_info, GL_STATIC_DRAW);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info_ebo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices_info), indices_info, GL_STATIC_DRAW);
-
-		// position attribute
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-		glEnableVertexAttribArray(0);
-		// color attribute
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-		glEnableVertexAttribArray(1);
-		// texture coord attribute
-		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-		glEnableVertexAttribArray(2);
-
-		glGenTextures(1, &info_texture);
-
-		glBindTexture(GL_TEXTURE_2D, info_texture);
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// set texture wrapping to GL_REPEAT (default wrapping method)
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		// set texture filtering parameters
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, info_width, info_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-		glGenerateMipmap(GL_TEXTURE_2D);
-		stbi_image_free(data);
-	} else {
-		std::cout << "Failed to load info texture" << std::endl;
-	}
 
     unsigned int voxel_vao;
     glGenVertexArrays(1, &voxel_vao);
@@ -407,7 +340,7 @@ Resources load_resources(SDL_Window* window, const ScreenAnimation& animation) {
 
     unsigned int colors_vbo;
     glGenBuffers(1, &colors_vbo);
-    load_image(animation.images[0], image_width, image_height, colors_vbo);
+    TRY_ERROR(load_image(animation.images[0], image_width, image_height, colors_vbo));
 
     float voxel_scale = 1.0f;
     float half_width = float(image_width) / 2.0f * voxel_scale * snes_factor_horizontal;
@@ -443,50 +376,147 @@ Resources load_resources(SDL_Window* window, const ScreenAnimation& animation) {
     glBindVertexArray(0);
 
     // be sure to activate shader when setting uniforms/drawing objects
-    Shader lighting_shader{
+    TRY_RESULT(Shader, lighting_shader, Shader::load_shader(
         FileSystem::getPath("resources/shaders/voxel.vs").c_str(),
         FileSystem::getPath("resources/shaders/voxel.fs").c_str()
-    };
-	Shader info_shader{
-		FileSystem::getPath("resources/shaders/info_panel.vs").c_str(),
-		FileSystem::getPath("resources/shaders/info_panel.fs").c_str()
-	};
+    ));
+
+	TRY_GL_ERROR;
+
 	ty::Camera camera{};
 	camera.movement_speed *= 5;
 	camera.SetPosition(glm::vec3{ 0.0f, 0.0f, 270.0f * offset_multiplier });
-    return Resources {
-        window,
-        0,
-        0,
-        std::move(lighting_shader),
-		std::move(camera),
-		45.0f,
-        voxel_vao,
-        voxel_vbo,
-        colors_vbo,
-        animation,
-        image_width,
-        image_height,
-        0,
-        SDL_GetTicks(),
-        -1,
-        -1,
-        0.0f,
-        0.0f,
-        0.0f,
-        false,
-		0.0f,
-		info_texture,
-		info_vao,
-		std::move(info_shader),
-        0,
-        true,
-        false,
-        true
-    };
+
+	TRY_RESULT(auto, info_panel, load_info_resources());
+
+	Resources res{};
+    res.window = window;
+    res.ticks = 0;
+    res.last_time = 0;
+    res.lighting_shader = std::move(lighting_shader);
+	res.info_panel = std::move(info_panel);
+	res.camera = std::move(camera);
+	res.camera_zoom = 45.0f;
+    res.voxel_vao = voxel_vao;
+    res.voxel_vbo = voxel_vbo;
+    res.colors_vbo = colors_vbo;
+    res.animation = animation;
+    res.image_width = image_width;
+    res.image_height = image_height;
+    res.image_counter = 0;
+    res.image_tick = SDL_GetTicks();
+    res.last_mouse_x = -1;
+    res.last_mouse_y = -1;
+    res.cur_voxel_scale_x = 0.0f;
+    res.cur_voxel_scale_y = 0.0f;
+    res.cur_voxel_gap = 0.0f;
+    res.full_screen = false;
+	res.voxels_pulse = 0.0f;
+    res.showing_waves = false;
+    res.showing_voxels = true;
+    return res;
 }
 
-void update(const Input& input, Resources& res, float delta_time) {
+ty::result<InfoResources> load_info_resources() {
+	InfoResources info_res;
+
+	int info_width, info_height, info_nr_channels;
+	GLuint info_texture;
+	TRY_NOTNULL(auto, data, stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0));
+	unsigned int info_vao;
+	float vertices_info[] = {
+		// positions          // colors           // texture coords
+		1.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
+		1.0f,  -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+		0.75f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
+		0.75f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
+	};
+	unsigned int indices_info[] = {
+		0, 1, 3, // first triangle
+		1, 2, 3  // second triangle
+	};
+	unsigned int info_vbo, info_ebo;
+	glGenVertexArrays(1, &info_vao);
+	glGenBuffers(1, &info_vbo);
+	glGenBuffers(1, &info_ebo);
+
+	glBindVertexArray(info_vao);
+
+	glBindBuffer(GL_ARRAY_BUFFER, info_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_info), vertices_info, GL_STATIC_DRAW);
+
+	TRY_GL_ERROR;
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info_ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices_info), indices_info, GL_STATIC_DRAW);
+
+	TRY_GL_ERROR;
+
+	// position attribute
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	// color attribute
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	// texture coord attribute
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+	glEnableVertexAttribArray(2);
+
+	glGenTextures(1, &info_texture);
+
+	glBindTexture(GL_TEXTURE_2D, info_texture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// set texture wrapping to GL_REPEAT (default wrapping method)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	// set texture filtering parameters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, info_width, info_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	TRY_GL_ERROR;
+	stbi_image_free(data);
+
+	TRY_RESULT(Shader, info_shader, Shader::load_shader(
+		FileSystem::getPath("resources/shaders/info_panel.vs").c_str(),
+		FileSystem::getPath("resources/shaders/info_panel.fs").c_str()
+	));
+
+	info_res.info_texture = info_texture;
+	info_res.info_vao = info_vao;
+	info_res.info_shader = std::move(info_shader);
+	info_res.info_mixer = 0.0f;
+	info_res.showing_info = true;
+	return info_res;
+}
+
+ty::error load_image(const char* path, int& image_width, int& image_height, unsigned int colors_vbo) {
+	int image_nr_channels;
+	TRY_NOTNULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &image_width, &image_height, &image_nr_channels, 0));
+	std::vector<glm::vec4> colors(image_width * image_height);
+	int index = 0;
+	for (int j = 0; j < image_height; j++) {
+		for (int i = 0; i < image_width; i++) {
+			colors[j * image_width + i] = glm::vec4{
+				((float)data[index + 0]) / 255.0f,
+				((float)data[index + 1]) / 255.0f,
+				((float)data[index + 2]) / 255.0f,
+				((float)data[index + 3]) / 255.0f
+			};
+			index += image_nr_channels;
+		}
+	}
+	stbi_image_free(data);
+	glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
+
+	TRY_GL_ERROR;
+	RETURN_OK;
+}
+
+
+ty::error update(const Input& input, Resources& res, float delta_time) {
 	res.buttons.f11.track(input.f11);
 	res.buttons.lalt.track(input.alt);
 	res.buttons.enter.track(input.enter);
@@ -512,7 +542,7 @@ void update(const Input& input, Resources& res, float delta_time) {
             res.image_counter = 0;
         }
 
-        load_image(res.animation.images[res.image_counter], res.image_width, res.image_height, res.colors_vbo);
+        TRY_ERROR(load_image(res.animation.images[res.image_counter], res.image_width, res.image_height, res.colors_vbo));
     }
 
 	res.buttons.waving.track(input.change_waving);
@@ -528,13 +558,16 @@ void update(const Input& input, Resources& res, float delta_time) {
         } else {
             glBufferData(GL_ARRAY_BUFFER, sizeof(cube_geometry), cube_geometry, GL_STATIC_DRAW);
         }
+
+		TRY_GL_ERROR;
+
         std::cout << "Activating " << (res.showing_voxels ? "pixels" : "voxels") << ".\n";
         res.showing_voxels = !res.showing_voxels;
     }
 
 	res.buttons.f1.track(input.f1);
 	if (res.buttons.f1.just_pressed()) {
-		res.showing_info = !res.showing_info;
+		res.info_panel.showing_info = !res.info_panel.showing_info;
 	}
 
 	res.buttons.speed_up.track(input.speed_up);
@@ -618,7 +651,7 @@ void update(const Input& input, Resources& res, float delta_time) {
     glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 1.0f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
-    res.info_mixer += delta_time * 0.1f;
+    res.info_panel.info_mixer += delta_time * 0.1f;
 	if (res.showing_waves) {
 		res.voxels_pulse += delta_time * 0.1f;
 	}
@@ -631,7 +664,7 @@ void update(const Input& input, Resources& res, float delta_time) {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    res.lighting_shader.use();
+    TRY_ERROR(res.lighting_shader.use());
 	res.lighting_shader.setFloat("pulse", res.voxels_pulse * 7);
     res.lighting_shader.setFloat("ambientStrength", 0.5f);
     res.lighting_shader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
@@ -641,17 +674,25 @@ void update(const Input& input, Resources& res, float delta_time) {
 	res.lighting_shader.setVec3("voxel_scale", voxel_scale);
     res.lighting_shader.setVec2("voxel_gap", voxel_gap);
 
+	TRY_GL_ERROR;
+
     // world transformation
     glBindVertexArray(res.voxel_vao);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.image_width * res.image_height);
+	
+	TRY_GL_ERROR;
 
-    if (res.showing_info) {
-        glBindTexture(GL_TEXTURE_2D, res.info_texture);
-        res.info_shader.use();
-        res.info_shader.setFloat("mixer", res.info_mixer);
-        glBindVertexArray(res.info_vao);
+    if (res.info_panel.showing_info) {
+        glBindTexture(GL_TEXTURE_2D, res.info_panel.info_texture);
+        TRY_ERROR(res.info_panel.info_shader.use());
+        res.info_panel.info_shader.setFloat("mixer", res.info_panel.info_mixer);
+        glBindVertexArray(res.info_panel.info_vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+		TRY_GL_ERROR;
     }
+
+	RETURN_OK;
 }
 
 void read_input(Input& input, bool& loop) {
@@ -756,7 +797,7 @@ void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int&
 		width = real_width;
 		height = real_height;
 		SDL_SetWindowSize(window, width, height);
-		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
+		//SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
 	}
 }
 #endif

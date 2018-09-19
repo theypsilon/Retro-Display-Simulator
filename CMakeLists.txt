@@ -31,7 +31,7 @@ set(LIBS ${LIBS} "${SDL2_LIBRARIES}")
 
 set(SRCS ${SRCS} "src/main.cpp")
 if (WIN32)
-	add_executable(retro-voxel-display WIN32 ${SRCS})
+	add_executable(retro-voxel-display ${SRCS})
 	add_custom_command(TARGET retro-voxel-display POST_BUILD
      COMMAND ${CMAKE_COMMAND} -E copy_if_different
          "${SDL2_DIR}/lib/x64/SDL2.dll"

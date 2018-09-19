@@ -1,3 +1,6 @@
+#ifndef TY_BOOLEAN_BUTTON_H
+#define TY_BOOLEAN_BUTTON_H
+
 namespace ty {
 	class boolean_button {
 		bool _activated = false;
@@ -32,3 +35,5 @@ namespace ty {
 		}
 	};
 }
+
+#endif
