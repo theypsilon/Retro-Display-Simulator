@@ -34,6 +34,11 @@ struct InternalButtons {
 	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels;
 };
 
+struct ScreenAnimation {
+    std::vector<const char*> images;
+    float milliseconds = 16.666667;
+};
+
 struct Resources {
     SDL_Window* window;
     unsigned int ticks;
@@ -43,7 +48,10 @@ struct Resources {
 	float camera_zoom;
     unsigned int voxel_vao;
     unsigned int voxel_vbo;
+    unsigned int colors_vbo;
+    ScreenAnimation animation;
     int image_width, image_height;
+    int image_counter, image_tick;
     int last_mouse_x, last_mouse_y;
     float cur_voxel_scale_x;
     float cur_voxel_scale_y;
@@ -160,31 +168,46 @@ const float square_geometry[] = {
 unsigned int SCR_WIDTH  = 1920;
 unsigned int SCR_HEIGHT = 1080;
 
-Resources load_resources(SDL_Window* window, const std::string& path);
+Resources load_resources(SDL_Window* window, const ScreenAnimation& animation);
 void update(const Input& input, Resources& res, float delta_time);
 void read_input(Input& input, bool& loop);
 void windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
-const char* const images[] = {
-	"resources/textures/snes2.png",
-	"resources/textures/snes3.png",
-	"resources/textures/snes4.png",
-	"resources/textures/snes.png",
-	"resources/textures/seikendensetsu1.png",
-	"resources/textures/voxel_chronotrigger1.png",
+const ScreenAnimation animations[] = {
+	ScreenAnimation{{"resources/textures/snes2.png"}},
+	ScreenAnimation{{"resources/textures/snes3.png"}},
+	ScreenAnimation{{"resources/textures/snes4.png"}},
+	ScreenAnimation{{"resources/textures/snes.png"}},
+	ScreenAnimation{{
+        "resources/textures/seikendensetsu1.png",
+        "resources/textures/seikendensetsu2.png",
+        "resources/textures/seikendensetsu3.png",
+        "resources/textures/seikendensetsu4.png",
+        "resources/textures/seikendensetsu5.png",
+        "resources/textures/seikendensetsu6.png",
+    }},
+	ScreenAnimation{{
+        "resources/textures/voxel_chronotrigger1.png",
+        "resources/textures/voxel_chronotrigger2.png",
+        "resources/textures/voxel_chronotrigger3.png",
+        "resources/textures/voxel_chronotrigger4.png",
+//        "resources/textures/voxel_chronotrigger1.png",
+//        "resources/textures/voxel_chronotrigger6.png",
+//        "resources/textures/voxel_chronotrigger7.png",
+//        "resources/textures/voxel_chronotrigger8.png",
+    }},
 //	"resources/textures/voxe_supermarioworld1.jpg"
 };
 
-auto images_size = sizeof(images) / sizeof(images[0]);
+auto animiations_size = sizeof(animations) / sizeof(animations[0]);
 
 int main(int argc, char* argv[]) {
 	std::srand(std::time(nullptr));
-	auto image = images[std::rand() % images_size];
+	auto animation = animations[std::rand() % animiations_size];
 	if (argc > 1) {
-		image = argv[1];
+		animation = ScreenAnimation{{argv[1]}};
 	}
-	std::cout << "Playing image '" << image << "'.\n";
-    const auto path = FileSystem::getPath(image);
+	std::cout << "Playing image '" << animation.images[0] << "'.\n";
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "Failed to init SDL\n";
         return -1;
@@ -261,7 +284,7 @@ int main(int argc, char* argv[]) {
     glEnable(GL_DEPTH_TEST);
 
     Input input;
-    Resources res = load_resources(main_window, path);
+    Resources res = load_resources(main_window, animation);
 
     bool loop = true;
     float delta_time = 0.0f;
@@ -280,15 +303,11 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-
-Resources load_resources(SDL_Window* window, const std::string& path) {
-    int image_width, image_height, image_nr_channels;
-    stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
-    unsigned char *data = stbi_load(path.c_str(), &image_width, &image_height, &image_nr_channels, 0);
-    std::cout << "Will load instances: " << (image_width * image_height) << ", Size: " << (image_width * image_height * 16) << std::endl;
+void load_image(const char* path, int& image_width, int& image_height, unsigned int colors_vbo) {
+    int image_nr_channels;
+    unsigned char *data = stbi_load(path, &image_width, &image_height, &image_nr_channels, 0);
     std::vector<glm::vec4> colors(image_width * image_height);
     if (data) {
-        std::cout << "width: " << image_width << ", height: " << image_height << ", nrChannels: " << image_nr_channels << std::endl;
         int index = 0;
         for (int j = 0; j < image_height; j++) {
             for (int i = 0; i < image_width; i++) {
@@ -301,13 +320,21 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
                 index += image_nr_channels;
             }
         }
-		stbi_image_free(data);
+        stbi_image_free(data);
     } else {
         std::cout << "Failed to load target texture" << std::endl;
     }
+    glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
+}
+
+
+Resources load_resources(SDL_Window* window, const ScreenAnimation& animation) {
+    int image_width, image_height, image_nr_channels;
+    stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
 	int info_width, info_height, info_nr_channels;
 	GLuint info_texture;
-	data = stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
+	auto data = stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0);
 	unsigned int info_vao;
 	if (data) {
 		float vertices_info[] = {
@@ -360,20 +387,6 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 	} else {
 		std::cout << "Failed to load info texture" << std::endl;
 	}
-    float voxel_scale = 1.0f;
-    float half_width = float(image_width) / 2.0f * voxel_scale * snes_factor_horizontal;
-    float half_height = float(image_height) / 2.0f * voxel_scale;
-
-	int offset_multiplier = 1;
-
-    std::vector<glm::vec2> offsets(image_width * image_height);
-    for (int j = 0; j < image_height; j++) {
-        for (int i = 0; i < image_width; i++) {
-            float x = i * voxel_scale * snes_factor_horizontal - half_width;
-            float y = j * voxel_scale - half_height;
-            offsets[j * image_width + i] = glm::vec2(x * offset_multiplier, y * offset_multiplier);
-        }
-    }
 
     unsigned int voxel_vao;
     glGenVertexArrays(1, &voxel_vao);
@@ -394,8 +407,22 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 
     unsigned int colors_vbo;
     glGenBuffers(1, &colors_vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
+    load_image(animation.images[0], image_width, image_height, colors_vbo);
+
+    float voxel_scale = 1.0f;
+    float half_width = float(image_width) / 2.0f * voxel_scale * snes_factor_horizontal;
+    float half_height = float(image_height) / 2.0f * voxel_scale;
+
+    int offset_multiplier = 1;
+
+    std::vector<glm::vec2> offsets(image_width * image_height);
+    for (int j = 0; j < image_height; j++) {
+        for (int i = 0; i < image_width; i++) {
+            float x = i * voxel_scale * snes_factor_horizontal - half_width;
+            float y = j * voxel_scale - half_height;
+            offsets[j * image_width + i] = glm::vec2(x * offset_multiplier, y * offset_multiplier);
+        }
+    }
 
     // color attribute
     glEnableVertexAttribArray(2);
@@ -436,8 +463,12 @@ Resources load_resources(SDL_Window* window, const std::string& path) {
 		45.0f,
         voxel_vao,
         voxel_vbo,
+        colors_vbo,
+        animation,
         image_width,
         image_height,
+        0,
+        SDL_GetTicks(),
         -1,
         -1,
         0.0f,
@@ -471,6 +502,17 @@ void update(const Input& input, Resources& res, float delta_time) {
         std::cout << "FPS: " << (res.ticks / (fps_time / 1000)) << std::endl;
         res.last_time = now;
         res.ticks = 0;
+    }
+
+    if (res.animation.images.size() > 1 && now > res.image_tick + (1000 / 60) * 4) {
+        res.image_tick = now;
+
+        res.image_counter++;
+        if (res.image_counter >= res.animation.images.size()) {
+            res.image_counter = 0;
+        }
+
+        load_image(res.animation.images[res.image_counter], res.image_width, res.image_height, res.colors_vbo);
     }
 
 	res.buttons.waving.track(input.change_waving);
@@ -586,7 +628,7 @@ void update(const Input& input, Resources& res, float delta_time) {
 
 	res.ticks++;
 
-	glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     res.lighting_shader.use();
