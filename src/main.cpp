@@ -36,7 +36,7 @@ struct InternalButtons {
 
 struct ScreenAnimation {
     std::vector<const char*> images;
-    float milliseconds = 16.666667;
+    int milliseconds = 100;
 };
 
 struct Resources {
@@ -504,7 +504,7 @@ void update(const Input& input, Resources& res, float delta_time) {
         res.ticks = 0;
     }
 
-    if (res.animation.images.size() > 1 && now > res.image_tick + (1000 / 60) * 4) {
+    if (res.animation.images.size() > 1 && now > res.image_tick + res.animation.milliseconds) {
         res.image_tick = now;
 
         res.image_counter++;
