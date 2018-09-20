@@ -209,7 +209,12 @@ const AnimationPaths animation_collection[] = {
 //        "resources/textures/voxel_chronotrigger7.png",
 //        "resources/textures/voxel_chronotrigger8.png",
     }},
-//	"resources/textures/voxe_supermarioworld1.jpg"
+	AnimationPaths{{
+        "resources/textures/voxel_supermarioworld1.png",
+        "resources/textures/voxel_supermarioworld2.png",
+        "resources/textures/voxel_supermarioworld3.png",
+        "resources/textures/voxel_supermarioworld4.png",
+    }}
 };
 
 auto animation_collection_size = sizeof(animation_collection) / sizeof(animation_collection[0]);
@@ -489,7 +494,7 @@ ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector
 	std::vector<std::vector<glm::vec4>> colors_by_image;
 	for (auto path : paths) {
 		int current_width, current_height;
-		TRY_NOTNULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &current_width, &current_height, &image_nr_channels, 0));
+		TRY_NOTNULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &current_width, &current_height, &image_nr_channels, 0), path);
 		if (image_width == -1 && image_height == -1) {
 			image_width = current_width;
 			image_height = current_height;
