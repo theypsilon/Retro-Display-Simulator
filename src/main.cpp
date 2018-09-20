@@ -192,14 +192,6 @@ const AnimationPaths animation_collection[] = {
 	AnimationPaths{{"resources/textures/snes4.png"}},
 	AnimationPaths{{"resources/textures/snes.png"}},
 	AnimationPaths{{
-        "resources/textures/seikendensetsu1.png",
-        "resources/textures/seikendensetsu2.png",
-        "resources/textures/seikendensetsu3.png",
-        "resources/textures/seikendensetsu4.png",
-        "resources/textures/seikendensetsu5.png",
-        "resources/textures/seikendensetsu6.png",
-    }},
-	AnimationPaths{{
         "resources/textures/voxel_chronotrigger1.png",
         "resources/textures/voxel_chronotrigger2.png",
         "resources/textures/voxel_chronotrigger3.png",
@@ -210,11 +202,47 @@ const AnimationPaths animation_collection[] = {
 //        "resources/textures/voxel_chronotrigger8.png",
     }},
 	AnimationPaths{{
-        "resources/textures/voxel_supermarioworld1.png",
-        "resources/textures/voxel_supermarioworld2.png",
-        "resources/textures/voxel_supermarioworld3.png",
-        "resources/textures/voxel_supermarioworld4.png",
-    }}
+		"resources/textures/00.png",
+        "resources/textures/01.png",
+        "resources/textures/02.png",
+        "resources/textures/03.png",
+        "resources/textures/04.png",
+        "resources/textures/05.png",
+        "resources/textures/06.png",
+        "resources/textures/07.png",
+        "resources/textures/08.png",
+        "resources/textures/09.png",
+        "resources/textures/10.png",
+        "resources/textures/11.png",
+        "resources/textures/12.png",
+        "resources/textures/13.png",
+        "resources/textures/14.png",
+        "resources/textures/15.png",
+        "resources/textures/16.png",
+        "resources/textures/17.png",
+        "resources/textures/18.png",
+        "resources/textures/19.png",
+        "resources/textures/20.png",
+        "resources/textures/21.png",
+        "resources/textures/22.png",
+        "resources/textures/23.png",
+        "resources/textures/24.png",
+        "resources/textures/25.png",
+        "resources/textures/26.png",
+        "resources/textures/27.png",
+        "resources/textures/28.png",
+        "resources/textures/29.png",
+        "resources/textures/30.png",
+        "resources/textures/31.png",
+        "resources/textures/32.png",
+        "resources/textures/33.png",
+        "resources/textures/34.png",
+        "resources/textures/35.png",
+        "resources/textures/36.png",
+        "resources/textures/37.png",
+        "resources/textures/38.png",
+        "resources/textures/39.png",
+	}, 16}
 };
 
 auto animation_collection_size = sizeof(animation_collection) / sizeof(animation_collection[0]);
@@ -238,7 +266,7 @@ ty::error program(int argc, char* argv[]) {
 	}
 	std::cout << "Playing image '" << animation_paths.paths[0] << "'.\n";
 
-	TRY_NONNEG(SDL_Init(SDL_INIT_VIDEO));
+	TRY_NON_NEG(SDL_Init(SDL_INIT_VIDEO));
 	atexit(SDL_Quit);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -261,7 +289,7 @@ ty::error program(int argc, char* argv[]) {
 	}
 #endif
 
-	TRY_NOTNULL(auto, main_window, SDL_CreateWindow(
+	TRY_NOT_NULL(auto, main_window, SDL_CreateWindow(
 		"Retro Voxel Display",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
@@ -276,8 +304,8 @@ ty::error program(int argc, char* argv[]) {
 
 	SDL_WarpMouseInWindow(main_window, SCR_WIDTH / 2, SCR_HEIGHT / 2);
 
-	TRY_NOTNULL(auto, glContext, SDL_GL_CreateContext(main_window));
-	TRY_NONNEG(gladLoadGLLoader(SDL_GL_GetProcAddress))
+	TRY_NOT_NULL(auto, glContext, SDL_GL_CreateContext(main_window));
+	TRY_NON_NEG(gladLoadGLLoader(SDL_GL_GetProcAddress))
 
 	GLint major, minor;
 	glGetIntegerv(GL_MAJOR_VERSION, &major);
@@ -288,12 +316,13 @@ ty::error program(int argc, char* argv[]) {
 	printf("GL Version (integer) : %d.%d\n", major, minor);
 	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-	TRY_NONNEG(SDL_GL_SetSwapInterval(1));
+	TRY_NON_NEG(SDL_GL_SetSwapInterval(1));
 
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
 
 	TRY_RESULT(auto, res, load_resources(main_window, animation_paths));
+
 	Input input;
 	bool loop = true;
 	float delta_time = 0.0f;
@@ -303,12 +332,12 @@ ty::error program(int argc, char* argv[]) {
 		delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
 		last_time = current_time;
 
-		TRY_ERROR(read_input(input, loop);
+		TRY_ERROR(read_input(input, loop));
 		TRY_ERROR(update(input, res, delta_time));
 
 		SDL_GL_SwapWindow(main_window);
 
-		TRY_GL_ERROR;
+		TRY_NOT_GL_ERROR();
 	}
 
 	RETURN_OK;
@@ -325,7 +354,7 @@ ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& a
     unsigned int voxel_vbo;
     glGenBuffers(1, &voxel_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, voxel_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cube_geometry), cube_geometry, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(square_geometry), square_geometry, GL_STATIC_DRAW);
 
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
@@ -378,7 +407,7 @@ ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& a
         FileSystem::getPath("resources/shaders/voxel.fs").c_str()
     ));
 
-	TRY_GL_ERROR;
+	TRY_NOT_GL_ERROR();
 
 	ty::Camera camera{};
 	camera.movement_speed *= 5;
@@ -410,7 +439,7 @@ ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& a
     res.full_screen = false;
 	res.voxels_pulse = 0.0f;
     res.showing_waves = false;
-    res.showing_voxels = true;
+    res.showing_voxels = false;
     return res;
 }
 
@@ -419,7 +448,7 @@ ty::result<InfoResources> load_info_resources() {
 
 	int info_width, info_height, info_nr_channels;
 	GLuint info_texture;
-	TRY_NOTNULL(auto, data, stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0));
+	TRY_NOT_NULL(auto, data, stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0));
 	unsigned int info_vao;
 	float vertices_info[] = {
 		// positions          // colors           // texture coords
@@ -442,12 +471,12 @@ ty::result<InfoResources> load_info_resources() {
 	glBindBuffer(GL_ARRAY_BUFFER, info_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_info), vertices_info, GL_STATIC_DRAW);
 
-	TRY_GL_ERROR;
+	TRY_NOT_GL_ERROR();
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, info_ebo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices_info), indices_info, GL_STATIC_DRAW);
 
-	TRY_GL_ERROR;
+	TRY_NOT_GL_ERROR();
 
 	// position attribute
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
@@ -472,7 +501,7 @@ ty::result<InfoResources> load_info_resources() {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, info_width, info_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 	glGenerateMipmap(GL_TEXTURE_2D);
 
-	TRY_GL_ERROR;
+	TRY_NOT_GL_ERROR();
 	stbi_image_free(data);
 
 	TRY_RESULT(Shader, info_shader, Shader::load_shader(
@@ -494,7 +523,7 @@ ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector
 	std::vector<std::vector<glm::vec4>> colors_by_image;
 	for (auto path : paths) {
 		int current_width, current_height;
-		TRY_NOTNULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &current_width, &current_height, &image_nr_channels, 0), path);
+		TRY_NOT_NULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &current_width, &current_height, &image_nr_channels, 0), path);
 		if (image_width == -1 && image_height == -1) {
 			image_width = current_width;
 			image_height = current_height;
@@ -525,7 +554,7 @@ ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int imag
 	glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * image_width * image_height, colors.data(), GL_STATIC_DRAW);
 
-	TRY_GL_ERROR;
+	TRY_NOT_GL_ERROR();
 
 	RETURN_OK;
 }
@@ -573,7 +602,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
             glBufferData(GL_ARRAY_BUFFER, sizeof(cube_geometry), cube_geometry, GL_STATIC_DRAW);
         }
 
-		TRY_GL_ERROR;
+		TRY_NOT_GL_ERROR();
 
         std::cout << "Activating " << (res.showing_voxels ? "pixels" : "voxels") << ".\n";
         res.showing_voxels = !res.showing_voxels;
@@ -706,7 +735,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 ty::error read_input(Input& input, bool& loop) {
 	SDL_PumpEvents();
 
-	TRY_NOTNULL(const Uint8 *, kbstate, SDL_GetKeyboardState(NULL));
+	TRY_NOT_NULL(const Uint8 *, kbstate, SDL_GetKeyboardState(NULL));
 	loop = kbstate[SDL_SCANCODE_ESCAPE] == false && SDL_QuitRequested() == false;
 
 	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT) || kbstate[SDL_SCANCODE_SPACE];
@@ -748,7 +777,7 @@ ty::error windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned
 
 	SDL_SysWMinfo sys_wm_info;
 	SDL_VERSION(&sys_wm_info.version);
-	TRY_TRUE(SDL_GetWindowWMInfo(window, &sys_wm_info));
+	TRY_IS_TRUE(SDL_GetWindowWMInfo(window, &sys_wm_info));
 
 	typedef enum PROCESS_DPI_AWARENESS {
 		PROCESS_DPI_UNAWARE = 0,

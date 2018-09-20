@@ -13,12 +13,6 @@
 #define RETURN_OK \
 	return ty::error::none();
 
-#define TRY_NOTNULL(type, var, expr, ...) \
-	type var = expr; \
-	if (var == nullptr) { \
-		return ty::error{TY_INTERNAL_FILE_CTX + "Error, result is nullptr. " + std::string(__VA_ARGS__)}; \
-	} 
-
 #define TRY_RESULT(type, var, expr) \
 	auto _##var##_result = expr; \
 	if (!_##var##_result.is_ok()) { \
@@ -33,28 +27,34 @@
 	} \
 }
 
-#define TRY_NONNEG(expr, ...) { \
+#define TRY_NOT_NULL(type, var, expr, ...) \
+	type var = expr; \
+	if (var == nullptr) { \
+		return ty::error{TY_INTERNAL_FILE_CTX + "Error, result is nullptr. " + std::string(__VA_ARGS__)}; \
+	} 
+
+#define TRY_NON_NEG(expr, ...) { \
 	auto _non_neg = expr; \
 	if (_non_neg < 0) { \
 		return ty::error{TY_INTERNAL_FILE_CTX + "Error, result is less than 0: " + std::to_string(_non_neg) + ". " + std::string(__VA_ARGS__)}; \
 	} \
 }
 
-#define TRY_ZERO(expr, ...) { \
+#define TRY_IS_ZERO(expr, ...) { \
 	auto _zero = expr; \
 	if (_zero != 0) { \
 		return ty::error{TY_INTERNAL_FILE_CTX + "Error, result is not 0: " + std::to_string(_zero) + ". " + std::string(__VA_ARGS__)}; \
 	} \
 }
 
-#define TRY_TRUE(expr, ...) { \
+#define TRY_IS_TRUE(expr, ...) { \
 	auto _true = expr; \
 	if (!_true) { \
 		return ty::error{TY_INTERNAL_FILE_CTX + "Error, result is false. " + std::string(__VA_ARGS__)}; \
 	} \
 }
 
-#define TRY_GL_ERROR { \
+#define TRY_NOT_GL_ERROR() { \
 	auto _gl_err = glGetError(); \
 	if (_gl_err != GL_NO_ERROR) { \
 		return ty::error{ TY_INTERNAL_FILE_CTX + std::to_string(int(_gl_err)) }; \
