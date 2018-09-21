@@ -1,6 +1,9 @@
 project ( retro-voxel-display )
 
 cmake_minimum_required(VERSION 3.10)
+
+message(CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE})
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -31,8 +34,8 @@ add_library(GLAD "src/glad.c")
 set(LIBS ${LIBS} GLAD)
 set(LIBS ${LIBS} glfw ${GLFW_LIBRARIES})
 
-set(SRCS ${SRCS} "src/main.cpp")
-if (WIN32)
+set(SRCS ${SRCS} "src/main.cpp" "src/resources.cpp")
+if (WIN32 AND NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
 	set(SRCS ${SRCS} "src/win_main.cpp")
 	add_executable(retro-voxel-display WIN32 ${SRCS})
 	add_custom_command(TARGET retro-voxel-display POST_BUILD
@@ -44,3 +47,7 @@ else()
 endif()
 
 target_link_libraries(retro-voxel-display ${LIBS})
+
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+	target_compile_definitions(retro-voxel-display PRIVATE DEBUG)
+endif()

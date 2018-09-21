@@ -1,16 +1,11 @@
 ﻿#include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
-
-#include <stb_image.h>
+#include "resources.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
-
-#include <learnopengl/filesystem.h>
-#include <learnopengl/shader_m.h>
 
 #include <theypsilon/camera.h>
 #include <theypsilon/boolean_button.h>
@@ -23,6 +18,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <ctime>
 
 #ifdef WIN32
 extern "C"
@@ -206,52 +202,52 @@ const AnimationPaths animation_collection[] = {
 //        "resources/textures/voxel_chronotrigger8.png",
     }},*/
 	AnimationPaths{{
-		"resources/textures/00.png",
-        "resources/textures/01.png",
-        "resources/textures/02.png",
-        "resources/textures/03.png",
-        "resources/textures/04.png",
-        "resources/textures/05.png",
-        "resources/textures/06.png",
-        "resources/textures/07.png",
-        "resources/textures/08.png",
-        "resources/textures/09.png",
-        "resources/textures/10.png",
-        "resources/textures/11.png",
-        "resources/textures/12.png",
-        "resources/textures/13.png",
-        "resources/textures/14.png",
-        "resources/textures/15.png",
-        "resources/textures/16.png",
-        "resources/textures/17.png",
-        "resources/textures/18.png",
-        "resources/textures/19.png",
-        "resources/textures/20.png",
-        "resources/textures/21.png",
-        "resources/textures/22.png",
-        "resources/textures/23.png",
-        "resources/textures/24.png",
-        "resources/textures/25.png",
-        "resources/textures/26.png",
-        "resources/textures/27.png",
-        "resources/textures/28.png",
-        "resources/textures/29.png",
-        "resources/textures/30.png",
-        "resources/textures/31.png",
-        "resources/textures/32.png",
-        "resources/textures/33.png",
-        "resources/textures/34.png",
-        "resources/textures/35.png",
-        "resources/textures/36.png",
-        "resources/textures/37.png",
-        "resources/textures/38.png",
-        "resources/textures/39.png",
-		"resources/textures/40.png",
-		"resources/textures/41.png",
-		"resources/textures/42.png",
-		"resources/textures/43.png",
-		"resources/textures/44.png",
-		"resources/textures/45.png",
+		"resources/textures/wwix_00.png",
+        "resources/textures/wwix_01.png",
+        "resources/textures/wwix_02.png",
+        "resources/textures/wwix_03.png",
+        "resources/textures/wwix_04.png",
+        "resources/textures/wwix_05.png",
+        "resources/textures/wwix_06.png",
+        "resources/textures/wwix_07.png",
+        "resources/textures/wwix_08.png",
+        "resources/textures/wwix_09.png",
+        "resources/textures/wwix_10.png",
+        "resources/textures/wwix_11.png",
+        "resources/textures/wwix_12.png",
+        "resources/textures/wwix_13.png",
+        "resources/textures/wwix_14.png",
+        "resources/textures/wwix_15.png",
+        "resources/textures/wwix_16.png",
+        "resources/textures/wwix_17.png",
+        "resources/textures/wwix_18.png",
+        "resources/textures/wwix_19.png",
+        "resources/textures/wwix_20.png",
+        "resources/textures/wwix_21.png",
+        "resources/textures/wwix_22.png",
+        "resources/textures/wwix_23.png",
+        "resources/textures/wwix_24.png",
+        "resources/textures/wwix_25.png",
+        "resources/textures/wwix_26.png",
+        "resources/textures/wwix_27.png",
+        "resources/textures/wwix_28.png",
+        "resources/textures/wwix_29.png",
+        "resources/textures/wwix_30.png",
+        "resources/textures/wwix_31.png",
+        "resources/textures/wwix_32.png",
+        "resources/textures/wwix_33.png",
+        "resources/textures/wwix_34.png",
+        "resources/textures/wwix_35.png",
+        "resources/textures/wwix_36.png",
+        "resources/textures/wwix_37.png",
+        "resources/textures/wwix_38.png",
+        "resources/textures/wwix_39.png",
+		"resources/textures/wwix_40.png",
+		"resources/textures/wwix_41.png",
+		"resources/textures/wwix_42.png",
+		"resources/textures/wwix_43.png",
+		"resources/textures/wwix_44.png",
+		"resources/textures/wwix_45.png",
 	}, 16}
 };
 
@@ -270,6 +266,9 @@ int main(int argc, char* argv[]) {
 
 
 ty::error program(int argc, char* argv[]) {
+#ifdef DEBUG
+	std::cout << "DEBUG on!" << std::endl;
+#endif
 	std::srand(std::time(nullptr));	
 	auto animation_paths = animation_collection[std::rand() % animation_collection_size];
 	if (argc > 1) {
@@ -296,6 +295,7 @@ ty::error program(int argc, char* argv[]) {
 
 	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Retro Voxel Display", NULL, NULL));
 	glfwSetWindowPos(window, 0, 0);
+	//glfwSetWindowMonitor(window, nullptr, 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
 
 	glfwMakeContextCurrent(window);
 	TRY_NON_NEG(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress));
@@ -395,8 +395,7 @@ ty::error program(int argc, char* argv[]) {
 }
 
 ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& animation_paths) {
-    int image_width, image_height, image_nr_channels;
-    stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
+    int image_width = 0, image_height = 0, image_nr_channels = 0;
 
     unsigned int voxel_vao;
     glGenVertexArrays(1, &voxel_vao);
@@ -454,8 +453,8 @@ ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& a
 
     // be sure to activate shader when setting uniforms/drawing objects
     TRY_RESULT(Shader, lighting_shader, Shader::load_shader(
-        FileSystem::getPath("resources/shaders/voxel.vs").c_str(),
-        FileSystem::getPath("resources/shaders/voxel.fs").c_str()
+        "resources/shaders/voxel.vs",
+        "resources/shaders/voxel.fs"
     ));
 
 	TRY_NOT_GL_ERROR();
@@ -498,9 +497,8 @@ ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& a
 ty::result<InfoResources> load_info_resources() {
 	InfoResources info_res;
 
-	int info_width, info_height, info_nr_channels;
 	GLuint info_texture;
-	TRY_NOT_NULL(auto, data, stbi_load(FileSystem::getPath("resources/textures/info.png").c_str(), &info_width, &info_height, &info_nr_channels, 0));
+	TRY_RESULT(auto, image, Image_Data::load("resources/textures/info.png", 0));
 	unsigned int info_vao;
 	float vertices_info[] = {
 		// positions          // colors           // texture coords
@@ -550,15 +548,14 @@ ty::result<InfoResources> load_info_resources() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, info_width, info_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.get_data());
 	glGenerateMipmap(GL_TEXTURE_2D);
 
 	TRY_NOT_GL_ERROR();
-	stbi_image_free(data);
 
 	TRY_RESULT(Shader, info_shader, Shader::load_shader(
-		FileSystem::getPath("resources/shaders/info_panel.vs").c_str(),
-		FileSystem::getPath("resources/shaders/info_panel.fs").c_str()
+		"resources/shaders/info_panel.vs",
+		"resources/shaders/info_panel.fs"
 	));
 
 	info_res.info_texture = info_texture;
@@ -570,20 +567,18 @@ ty::result<InfoResources> load_info_resources() {
 }
 
 ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height) {
-	int image_nr_channels;
-	image_width = -1, image_height = -1;
 	std::vector<std::vector<glm::vec4>> colors_by_image;
 	for (auto path : paths) {
-		int current_width, current_height;
-		TRY_NOT_NULL(unsigned char *, data, stbi_load(FileSystem::getPath(path).c_str(), &current_width, &current_height, &image_nr_channels, 0), path);
-		if (image_width == -1 && image_height == -1) {
-			image_width = current_width;
-			image_height = current_height;
-		} else if (image_width != current_width || image_height != current_height) {
+		TRY_RESULT(auto, current_image, Image_Data::load(path, 0), path);
+		if (image_width == 0 && image_height == 0) {
+			image_width = current_image.width;
+			image_height = current_image.height;
+		} else if (image_width != current_image.width || image_height != current_image.height) {
 			RETURN_ERROR("width and height from image '" + path + "' does not match with the first image of the animation");
 		}
 		std::vector<glm::vec4> colors(image_width * image_height);
 		int index = 0;
+		auto data = current_image.get_data();
 		for (int j = 0; j < image_height; j++) {
 			for (int i = 0; i < image_width; i++) {
 				colors[j * image_width + i] = glm::vec4{
@@ -592,11 +587,9 @@ ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector
 					((float)data[index + 2]) / 255.0f,
 					((float)data[index + 3]) / 255.0f
 				};
-				index += image_nr_channels;
+				index += current_image.nr_channels;
 			}
 		}
-		stbi_image_free(data);
-
 		colors_by_image.emplace_back(std::move(colors));
 	}
 	return colors_by_image;
