@@ -569,7 +569,7 @@ ty::result<InfoResources> load_info_resources() {
 ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height) {
 	std::vector<std::vector<glm::vec4>> colors_by_image;
 	for (auto path : paths) {
-		TRY_RESULT(auto, current_image, Image_Data::load(path, 0), path);
+		TRY_RESULT(auto, current_image, Image_Data::load(path, 0));
 		if (image_width == 0 && image_height == 0) {
 			image_width = current_image.width;
 			image_height = current_image.height;
