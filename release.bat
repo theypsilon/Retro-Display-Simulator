@@ -19,7 +19,6 @@ mkdir build\release
 mkdir build\release\resources
 
 xcopy retro-voxel-display.exe build\release\ > nul
-xcopy SDL2.dll build\release\ > nul
 xcopy resources build\release\resources\ /S /E > nul
 
 rcedit build\release\retro-voxel-display.exe^

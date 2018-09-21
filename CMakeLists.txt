@@ -5,20 +5,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if (WIN32)
-	set(FORCE_STATIC_VCRT ON)
-	set(SDL2_DIR $ENV{SDLDIR})
-endif()
-
-find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
+include_directories("glfw/include")
+
+set( ENKITS_BUILD_EXAMPLES OFF CACHE BOOL "Build basic example applications" )
+set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL  "GLFW lib only" )
+set( GLFW_BUILD_TESTS OFF CACHE BOOL  "GLFW lib only" )
+set( GLFW_BUILD_DOCS OFF CACHE BOOL  "GLFW lib only" )
+set( GLFW_BUILD_INSTALL OFF CACHE BOOL  "GLFW lib only" )
+
+add_subdirectory( glfw )
 
 set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl -lstdc++fs")
 
 configure_file(configuration/root_directory.h.in configuration/root_directory.h)
 include_directories(${CMAKE_BINARY_DIR}/configuration)
-include_directories("${CMAKE_SOURCE_DIR}/includes/" "${SDL2_INCLUDE_DIRS}")
+include_directories("${CMAKE_SOURCE_DIR}/includes/")
 
 # first create relevant static libraries requried for other projects
 add_library(STB_IMAGE "src/stb_image.cpp")
@@ -26,24 +29,16 @@ set(LIBS ${LIBS} STB_IMAGE)
 
 add_library(GLAD "src/glad.c")
 set(LIBS ${LIBS} GLAD)
-
-set(LIBS ${LIBS} "${SDL2_LIBRARIES}")
+set(LIBS ${LIBS} glfw ${GLFW_LIBRARIES})
 
 set(SRCS ${SRCS} "src/main.cpp")
 if (WIN32)
+	set(SRCS ${SRCS} "src/win_main.cpp")
 	add_executable(retro-voxel-display WIN32 ${SRCS})
 	add_custom_command(TARGET retro-voxel-display POST_BUILD
-     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-         "${SDL2_DIR}/lib/x64/SDL2.dll"
-         $<TARGET_FILE_DIR:retro-voxel-display>)
-	add_custom_command(TARGET retro-voxel-display POST_BUILD
-     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-         "${SDL2_DIR}/lib/x64/SDL2.dll"
-         ${CMAKE_SOURCE_DIR})
-	add_custom_command(TARGET retro-voxel-display POST_BUILD
-     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-         ${CMAKE_CURRENT_BINARY_DIR}/retro-voxel-display.exe
-         ${CMAKE_SOURCE_DIR})
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			${CMAKE_CURRENT_BINARY_DIR}/retro-voxel-display.exe
+			${CMAKE_SOURCE_DIR})
 else()
 	add_executable(retro-voxel-display ${SRCS})
 endif()

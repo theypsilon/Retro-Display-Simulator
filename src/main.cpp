@@ -1,6 +1,6 @@
 ﻿#include <glad/glad.h>
 
-#include <SDL.h>
+#include <GLFW/glfw3.h>
 
 #include <stb_image.h>
 
@@ -22,6 +22,7 @@
 #include <vector>
 #include <iostream>
 #include <chrono>
+#include <thread>
 
 #ifdef WIN32
 extern "C"
@@ -54,9 +55,9 @@ struct InfoResources {
 };
 
 struct Resources {
-    SDL_Window* window;
+    GLFWwindow* window;
     unsigned int ticks;
-    Uint32 last_time;
+	std::chrono::time_point<std::chrono::system_clock> last_time;
     Shader lighting_shader;
 	InfoResources info_panel;
 	ty::Camera camera;
@@ -66,8 +67,10 @@ struct Resources {
     unsigned int colors_vbo;
 	AnimationColors animation_colors;
     int image_width, image_height;
-    unsigned int image_counter, image_tick;
-    int last_mouse_x, last_mouse_y;
+	unsigned int image_counter;
+	std::chrono::time_point<std::chrono::system_clock> image_tick;
+    double last_mouse_x, last_mouse_y;
+	double last_scroll_y;
     float cur_voxel_scale_x;
     float cur_voxel_scale_y;
     float cur_voxel_gap;
@@ -79,7 +82,9 @@ struct Resources {
 };
 
 struct Input {
-	bool walk_left = false,
+	bool escape = false,
+		space = false,
+        walk_left = false,
 		walk_right = false,
 		walk_up = false,
 		walk_down = false,
@@ -111,8 +116,9 @@ struct Input {
 		speed_down = false,
 		change_view = false,
 		change_waving = false;
-    int mouse_motion_x = -1;
-    int mouse_motion_y = -1;
+    double mouse_motion_x = -1;
+    double mouse_motion_y = -1;
+	double mouse_scroll_y = -1;
 };
 
 const long double ratio_4_3 = 4.0 / 3.0;
@@ -178,16 +184,14 @@ unsigned int SCR_WIDTH  = 1920;
 unsigned int SCR_HEIGHT = 1080;
 
 ty::error program(int argc, char* argv[]);
-ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& animation_paths);
+ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& animation_paths);
 ty::result<InfoResources> load_info_resources();
 ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height);
 ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo);
 ty::error update(const Input& input, Resources& res, float delta_time);
-ty::error read_input(Input& input, bool& loop);
-ty::error windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height);
 
 const AnimationPaths animation_collection[] = {
-	AnimationPaths{{"resources/textures/snes2.png"}},
+/*	AnimationPaths{{"resources/textures/snes2.png"}},
 	AnimationPaths{{"resources/textures/snes3.png"}},
 	AnimationPaths{{"resources/textures/snes4.png"}},
 	AnimationPaths{{"resources/textures/snes.png"}},
@@ -200,7 +204,7 @@ const AnimationPaths animation_collection[] = {
 //        "resources/textures/voxel_chronotrigger6.png",
 //        "resources/textures/voxel_chronotrigger7.png",
 //        "resources/textures/voxel_chronotrigger8.png",
-    }},
+    }},*/
 	AnimationPaths{{
 		"resources/textures/00.png",
         "resources/textures/01.png",
@@ -242,6 +246,12 @@ const AnimationPaths animation_collection[] = {
         "resources/textures/37.png",
         "resources/textures/38.png",
         "resources/textures/39.png",
+		"resources/textures/40.png",
+		"resources/textures/41.png",
+		"resources/textures/42.png",
+		"resources/textures/43.png",
+		"resources/textures/44.png",
+		"resources/textures/45.png",
 	}, 16}
 };
 
@@ -251,7 +261,8 @@ int main(int argc, char* argv[]) {
 	auto err = program(argc, argv);
 	if (err) {
 		std::cerr << "Ooops! Something went wrong!\n[ERROR] " << err.msg << "\nClosing program in 10 seconds.\n";
-		SDL_Delay(10000);
+		using namespace std::literals;
+		std::this_thread::sleep_for(10s);
 		return -1;
 	}
 	return 0;
@@ -266,46 +277,28 @@ ty::error program(int argc, char* argv[]) {
 	}
 	std::cout << "Playing image '" << animation_paths.paths[0] << "'.\n";
 
-	TRY_NON_NEG(SDL_Init(SDL_INIT_VIDEO));
-	atexit(SDL_Quit);
+	TRY_IS_TRUE(glfwInit());
+	atexit(glfwTerminate);
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+	glfwWindowHint(GLFW_DOUBLEBUFFER, 1);
+	glfwWindowHint(GLFW_DEPTH_BITS, 24);
 	//SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1); // This is MSAA on/off
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4); // This is MSAA number of sampling
+	glfwWindowHint(GLFW_SAMPLES, 4);
 
-#ifndef WIN32
-	SDL_DisplayMode display_mode;
-	if (SDL_GetDesktopDisplayMode(0, &display_mode) == 0) {
-		std::cout << "Resolution: " << display_mode.w << "x" << display_mode.h << std::endl;
-		SCR_WIDTH = display_mode.w;
-		SCR_HEIGHT = display_mode.h;
-	}
-#endif
+	auto video_mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	SCR_WIDTH = video_mode->width;
+	SCR_HEIGHT = video_mode->height;
 
-	TRY_NOT_NULL(auto, main_window, SDL_CreateWindow(
-		"Retro Voxel Display",
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		SCR_WIDTH,
-		SCR_HEIGHT,
-		SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI
-	));
+	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Retro Voxel Display", NULL, NULL));
+	glfwSetWindowPos(window, 0, 0);
 
-#ifdef WIN32
-	TRY_ERROR(windows_high_dpi_hack(main_window, SCR_WIDTH, SCR_HEIGHT));
-#endif
-
-	SDL_WarpMouseInWindow(main_window, SCR_WIDTH / 2, SCR_HEIGHT / 2);
-
-	TRY_NOT_NULL(auto, glContext, SDL_GL_CreateContext(main_window));
-	TRY_NON_NEG(gladLoadGLLoader(SDL_GL_GetProcAddress))
+	glfwMakeContextCurrent(window);
+	TRY_NON_NEG(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress));
 
 	GLint major, minor;
 	glGetIntegerv(GL_MAJOR_VERSION, &major);
@@ -316,26 +309,84 @@ ty::error program(int argc, char* argv[]) {
 	printf("GL Version (integer) : %d.%d\n", major, minor);
 	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-	TRY_NON_NEG(SDL_GL_SetSwapInterval(1));
+	glfwSwapInterval(1);
 
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
 
-	TRY_RESULT(auto, res, load_resources(main_window, animation_paths));
+	TRY_RESULT(auto, res, load_resources(window, animation_paths));
 
 	Input input;
-	bool loop = true;
+
+	glfwSetWindowUserPointer(window, &input);
+	glfwSetCursorPosCallback(window, [](GLFWwindow* window, double xpos, double ypos) {
+		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
+		input.mouse_motion_x = xpos;
+		input.mouse_motion_y = ypos;
+	});
+	glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int key, int action, int mods) {
+		if (key != GLFW_MOUSE_BUTTON_LEFT || action == GLFW_REPEAT) return;
+
+		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
+		input.mouse_click_left = action == GLFW_PRESS ? true : false;
+	});
+	glfwSetScrollCallback(window, [](GLFWwindow* window, double xoffset, double yoffset) {
+		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
+		input.mouse_scroll_y = yoffset;
+	});
+	glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+		if (action == GLFW_REPEAT) return;
+
+		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
+
+        bool activation = action == GLFW_PRESS ? true : false;
+
+        switch(key) {
+            case (GLFW_KEY_ESCAPE)    :input.escape                   = activation; break;
+			case (GLFW_KEY_SPACE)     :input.space                    = activation; break;
+    		case (GLFW_KEY_A)         :input.walk_left                = activation; break;
+    		case (GLFW_KEY_D)         :input.walk_right               = activation; break;
+    		case (GLFW_KEY_W)         :input.walk_forward             = activation; break;
+    		case (GLFW_KEY_S)         :input.walk_backward            = activation; break;
+    		case (GLFW_KEY_Q)         :input.walk_up                  = activation; break;
+    		case (GLFW_KEY_E)         :input.walk_down                = activation; break;
+    		case (GLFW_KEY_LEFT)      :input.turn_left                = activation; break;
+    		case (GLFW_KEY_RIGHT)     :input.turn_right               = activation; break;
+    		case (GLFW_KEY_UP)        :input.turn_up                  = activation; break;
+    		case (GLFW_KEY_DOWN)      :input.turn_down                = activation; break;
+    		case (GLFW_KEY_O)         :input.swap_voxels_to_pixels    = activation; break;
+    		case (GLFW_KEY_J)         :input.increase_voxel_scale_y   = activation; break;
+    		case (GLFW_KEY_K)         :input.decrease_voxel_scale_y   = activation; break;
+    		case (GLFW_KEY_U)         :input.increase_voxel_scale_x   = activation; break;
+    		case (GLFW_KEY_I)         :input.decrease_voxel_scale_x   = activation; break;
+    		case (GLFW_KEY_N)         :input.increase_voxel_gap       = activation; break;
+    		case (GLFW_KEY_M)         :input.decrease_voxel_gap       = activation; break;
+    		case (GLFW_KEY_F)         :input.speed_up                 = activation; break;
+    		case (GLFW_KEY_R)         :input.speed_down               = activation; break;
+    		case (GLFW_KEY_F1)        :input.f1                       = activation; break;
+    		case (GLFW_KEY_F11)       :input.f11                      = activation; break;
+    		case (GLFW_KEY_LEFT_ALT)  :input.alt                      = activation; break;
+    		case (GLFW_KEY_ENTER)     :input.enter                    = activation; break;
+    		case (GLFW_KEY_C)         :input.change_view              = activation; break;
+    		case (GLFW_KEY_P)         :input.change_waving            = activation; break;
+			case (GLFW_KEY_KP_ADD)	  :input.rotate_right             = activation; break;
+			case (GLFW_KEY_KP_SUBTRACT)     :input.rotate_left        = activation; break;
+        }
+	});
+
+
+
 	float delta_time = 0.0f;
 	auto last_time = std::chrono::system_clock::now();
-	while (loop) {
+	while (input.escape == false && glfwWindowShouldClose(window) == false) {
 		auto current_time = std::chrono::system_clock::now();
 		delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
 		last_time = current_time;
 
-		TRY_ERROR(read_input(input, loop));
 		TRY_ERROR(update(input, res, delta_time));
 
-		SDL_GL_SwapWindow(main_window);
+		glfwSwapBuffers(window);
+		glfwPollEvents();
 
 		TRY_NOT_GL_ERROR();
 	}
@@ -343,7 +394,7 @@ ty::error program(int argc, char* argv[]) {
 	RETURN_OK;
 }
 
-ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& animation_paths) {
+ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& animation_paths) {
     int image_width, image_height, image_nr_channels;
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
 
@@ -418,7 +469,7 @@ ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& a
 	Resources res{};
     res.window = window;
     res.ticks = 0;
-    res.last_time = 0;
+    res.last_time = std::chrono::system_clock::now();
     res.lighting_shader = std::move(lighting_shader);
 	res.info_panel = std::move(info_panel);
 	res.camera = std::move(camera);
@@ -430,9 +481,10 @@ ty::result<Resources> load_resources(SDL_Window* window, const AnimationPaths& a
     res.image_width = image_width;
     res.image_height = image_height;
     res.image_counter = 0;
-    res.image_tick = SDL_GetTicks();
+    res.image_tick = std::chrono::system_clock::now();
     res.last_mouse_x = -1;
     res.last_mouse_y = -1;
+	res.last_scroll_y = -1;
     res.cur_voxel_scale_x = 0.0f;
     res.cur_voxel_scale_y = 0.0f;
     res.cur_voxel_gap = 0.0f;
@@ -564,20 +616,18 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 	res.buttons.lalt.track(input.alt);
 	res.buttons.enter.track(input.enter);
     if (res.buttons.f11.just_pressed() || res.buttons.enter.just_pressed() && res.buttons.lalt || res.buttons.enter && res.buttons.lalt.just_pressed()) {
-        auto flag = res.full_screen ? 0 : SDL_WINDOW_FULLSCREEN;
-        SDL_SetWindowFullscreen(res.window, flag);
+		glfwSetWindowMonitor(res.window, res.full_screen ? nullptr : glfwGetPrimaryMonitor(), 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
         res.full_screen = !res.full_screen;
     }
 
-    auto now = SDL_GetTicks();
-    const auto fps_time = 1000;
-    if (now > res.last_time + fps_time) {
-        std::cout << "FPS: " << (res.ticks / (fps_time / 1000)) << std::endl;
+    auto now = std::chrono::system_clock::now();
+    if (now > res.last_time + std::chrono::seconds(1)) {
+        std::cout << "FPS: " << res.ticks << std::endl;
         res.last_time = now;
         res.ticks = 0;
     }
 
-    if (res.animation_colors.colors_by_image.size() > 1 && now > res.image_tick + res.animation_colors.milliseconds) {
+    if (res.animation_colors.colors_by_image.size() > 1 && now > res.image_tick + std::chrono::milliseconds(res.animation_colors.milliseconds)) {
         res.image_tick = now;
 
         res.image_counter++;
@@ -662,14 +712,28 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
     if (input.rotate_left  ) res.camera.Rotate(ty::CameraDirection::LEFT, delta_time);
     if (input.rotate_right ) res.camera.Rotate(ty::CameraDirection::RIGHT, delta_time);
 
-    if (input.mouse_click_left) {
+	if (res.last_scroll_y < 0) {
+		res.last_scroll_y = input.mouse_scroll_y;
+	} else if (res.last_scroll_y != input.mouse_scroll_y) {
+		double scroll_diff = input.mouse_scroll_y - res.last_scroll_y;
+		res.last_scroll_y = input.mouse_scroll_y;
+
+		if (res.camera_zoom >= 1.0f && res.camera_zoom <= 45.0f)
+			res.camera_zoom -= scroll_diff;
+		if (res.camera_zoom <= 1.0f)
+			res.camera_zoom = 1.0f;
+		if (res.camera_zoom >= 45.0f)
+			res.camera_zoom = 45.0f;
+	}
+
+    if (input.mouse_click_left || input.space) {
         if (res.last_mouse_x < 0) {
             res.last_mouse_x = input.mouse_motion_x;
             res.last_mouse_y = input.mouse_motion_y;
 		}
 		else {
-			float xoffset = input.mouse_motion_x - res.last_mouse_x;
-			float yoffset = res.last_mouse_y - input.mouse_motion_y; // reversed since y-coordinates go from bottom to top
+			double xoffset = input.mouse_motion_x - res.last_mouse_x;
+			double yoffset = res.last_mouse_y - input.mouse_motion_y; // reversed since y-coordinates go from bottom to top
 
 			res.last_mouse_x = input.mouse_motion_x;
 			res.last_mouse_y = input.mouse_motion_y;
@@ -731,112 +795,3 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
 	RETURN_OK;
 }
-
-ty::error read_input(Input& input, bool& loop) {
-	SDL_PumpEvents();
-
-	TRY_NOT_NULL(const Uint8 *, kbstate, SDL_GetKeyboardState(NULL));
-	loop = kbstate[SDL_SCANCODE_ESCAPE] == false && SDL_QuitRequested() == false;
-
-	input.mouse_click_left = SDL_GetMouseState(&input.mouse_motion_x, &input.mouse_motion_y) & SDL_BUTTON(SDL_BUTTON_LEFT) || kbstate[SDL_SCANCODE_SPACE];
-
-    input.walk_left              = kbstate[SDL_SCANCODE_A       ];// || kbstate[SDL_SCANCODE_LEFT ];
-    input.walk_right             = kbstate[SDL_SCANCODE_D       ];// || kbstate[SDL_SCANCODE_RIGHT];
-    input.walk_forward           = kbstate[SDL_SCANCODE_W       ];// || kbstate[SDL_SCANCODE_UP   ];
-    input.walk_backward          = kbstate[SDL_SCANCODE_S       ];// || kbstate[SDL_SCANCODE_DOWN ];
-    input.walk_up                = kbstate[SDL_SCANCODE_Q       ];
-    input.walk_down              = kbstate[SDL_SCANCODE_E       ];
-    input.turn_left              = kbstate[SDL_SCANCODE_LEFT    ];
-    input.turn_right             = kbstate[SDL_SCANCODE_RIGHT   ];
-    input.turn_up                = kbstate[SDL_SCANCODE_UP      ];
-    input.turn_down              = kbstate[SDL_SCANCODE_DOWN    ];
-    input.rotate_right           = kbstate[SDL_SCANCODE_KP_PLUS ];
-    input.rotate_left            = kbstate[SDL_SCANCODE_KP_MINUS];
-    input.swap_voxels_to_pixels = kbstate[SDL_SCANCODE_O       ];
-    input.increase_voxel_scale_y = kbstate[SDL_SCANCODE_J       ];
-    input.decrease_voxel_scale_y = kbstate[SDL_SCANCODE_K       ];
-	input.increase_voxel_scale_x = kbstate[SDL_SCANCODE_U       ];
-	input.decrease_voxel_scale_x = kbstate[SDL_SCANCODE_I       ];
-    input.increase_voxel_gap     = kbstate[SDL_SCANCODE_N       ];
-    input.decrease_voxel_gap     = kbstate[SDL_SCANCODE_M       ];
-	input.speed_up               = kbstate[SDL_SCANCODE_F       ];
-	input.speed_down             = kbstate[SDL_SCANCODE_R       ];
-	input.f1                     = kbstate[SDL_SCANCODE_F1      ];
-	input.f11                    = kbstate[SDL_SCANCODE_F11     ];
-	input.alt                    = kbstate[SDL_SCANCODE_LALT    ];
-	input.enter                  = kbstate[SDL_SCANCODE_RETURN  ];
-	input.change_view            = kbstate[SDL_SCANCODE_C       ];
-	input.change_waving          = kbstate[SDL_SCANCODE_P       ];
-	RETURN_OK;
-}
-
-#ifdef WIN32
-#include <cassert>
-#include "SDL_syswm.h"
-ty::error windows_high_dpi_hack(SDL_Window* window, unsigned int&width, unsigned int& height) {
-
-	SDL_SysWMinfo sys_wm_info;
-	SDL_VERSION(&sys_wm_info.version);
-	TRY_IS_TRUE(SDL_GetWindowWMInfo(window, &sys_wm_info));
-
-	typedef enum PROCESS_DPI_AWARENESS {
-		PROCESS_DPI_UNAWARE = 0,
-		PROCESS_SYSTEM_DPI_AWARE = 1,
-		PROCESS_PER_MONITOR_DPI_AWARE = 2
-	} PROCESS_DPI_AWARENESS;
-
-	void* userDLL;
-	BOOL(WINAPI *SetProcessDPIAware)(void); // Vista and later
-	void* shcoreDLL;
-	HRESULT(WINAPI *SetProcessDpiAwareness)(PROCESS_DPI_AWARENESS dpiAwareness); // Windows 8.1 and later
-
-	userDLL = SDL_LoadObject("USER32.DLL");
-	if (userDLL) {
-		SetProcessDPIAware = (BOOL(WINAPI *)(void)) SDL_LoadFunction(userDLL, "SetProcessDPIAware");
-	}
-
-	shcoreDLL = SDL_LoadObject("SHCORE.DLL");
-	if (shcoreDLL) {
-		SetProcessDpiAwareness = (HRESULT(WINAPI *)(PROCESS_DPI_AWARENESS)) SDL_LoadFunction(shcoreDLL, "SetProcessDpiAwareness");
-	}
-
-	bool result = false;
-	if (SetProcessDpiAwareness) {
-		/* Try Windows 8.1+ version */
-		result = S_OK == SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-		SDL_Log("called SetProcessDpiAwareness: %d", result ? 1 : 0);
-	}
-	else if (SetProcessDPIAware) {
-		/* Try Vista - Windows 8 version.
-		This has a constant scale factor for all monitors.
-		*/
-		result = TRUE == SetProcessDPIAware();
-		SDL_Log("called SetProcessDPIAware: %d", result ? 1 : 0);
-	}
-
-	if (!result) {
-		RETURN_OK;
-	}
-
-	auto monitor_from_window = (HMONITOR(WINAPI *)(HWND, DWORD)) SDL_LoadFunction(userDLL, "MonitorFromWindow");
-	auto get_monitor_info = (BOOL(WINAPI *)(HMONITOR, LPMONITORINFOEX)) SDL_LoadFunction(userDLL, "GetMonitorInfoA");
-	if (!monitor_from_window || !get_monitor_info) {
-		RETURN_OK;
-	}
-
-	auto hMonitor = monitor_from_window(sys_wm_info.info.win.window, MONITOR_DEFAULTTOPRIMARY);
-
-	MONITORINFOEX miex;
-	miex.cbSize = sizeof(miex);
-	get_monitor_info(hMonitor, &miex);
-	auto real_width = (miex.rcMonitor.right - miex.rcMonitor.left);
-	auto real_height = (miex.rcMonitor.bottom - miex.rcMonitor.top);
-	if (real_width != width || real_height != height) {
-		width = real_width;
-		height = real_height;
-		SDL_SetWindowSize(window, width, height);
-	}
-
-	RETURN_OK;
-}
-#endif
