@@ -79,6 +79,7 @@ LPSTR* CommandLineToArgvA(LPSTR lpCmdLine, INT *pNumArgs)
 
 ty::error program(int argc, char* argv[]);
 
+
 int CALLBACK WinMain(
 	HINSTANCE   hInstance,
 	HINSTANCE   hPrevInstance,
@@ -98,9 +99,13 @@ int CALLBACK WinMain(
 	auto err = program(argc, argv);
 	LocalFree(argv);
 	if (err) {
-		std::cerr << "Ooops! Something went wrong!\n[ERROR] " << err.msg << "\nClosing program in 10 seconds.\n";
-		using namespace std::literals;
-		std::this_thread::sleep_for(10s);
+		std::cerr << "[ERROR] " << err.msg;
+		MessageBoxA(
+			NULL, 
+			"Some unexpected error happened.\nMake sure you have installed the graphic drivers correctly.\nIf the problem persists, contact the author at:\ntheypsilon@gmail.com",
+			"Message", 
+			MB_OK | MB_ICONERROR
+		);
 		return -1;
 	}
 	return 0;

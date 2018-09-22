@@ -301,7 +301,7 @@ ty::error program(int argc, char* argv[]) {
 
 	std::cout << "Creating window with resolution " << SCR_WIDTH << "x" << SCR_HEIGHT << ".\n";
 
-	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Retro Voxel Display", NULL, NULL));
+	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, PROJECT_OFFICIAL_NAME, NULL, NULL));
 	glfwSetWindowPos(window, 0, 0);
 	//glfwSetWindowMonitor(window, nullptr, 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
 
