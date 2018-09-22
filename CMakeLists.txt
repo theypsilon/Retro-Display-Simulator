@@ -1,8 +1,16 @@
 project ( retro-voxel-display )
 
 cmake_minimum_required(VERSION 3.10)
-
 message(CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE})
+
+set(PROJECT_VERSION 0.1.0)
+set(PROJECT_OFFICIAL_NAME "Retro Voxel Display")
+set(PROJECT_BINARY_NAME rvd)
+
+add_definitions( -DPROJECT_VERSION="${PROJECT_VERSION}" -DPROJECT_OFFICIAL_NAME="${PROJECT_OFFICIAL_NAME}" -DPROJECT_BINARY_NAME="${PROJECT_BINARY_NAME}")
+configure_file(configuration/version.txt.in ${CMAKE_SOURCE_DIR}/configuration/version.var)
+configure_file(configuration/binary_name.txt.in ${CMAKE_SOURCE_DIR}/configuration/binary_name.var)
+configure_file(configuration/project_name.txt.in ${CMAKE_SOURCE_DIR}/configuration/project_name.var)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,17 +45,17 @@ set(LIBS ${LIBS} glfw ${GLFW_LIBRARIES})
 set(SRCS ${SRCS} "src/main.cpp" "src/resources.cpp")
 if (WIN32 AND NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
 	set(SRCS ${SRCS} "src/win_main.cpp")
-	add_executable(retro-voxel-display WIN32 ${SRCS})
-	add_custom_command(TARGET retro-voxel-display POST_BUILD
+	add_executable(${PROJECT_BINARY_NAME} WIN32 ${SRCS})
+	add_custom_command(TARGET ${PROJECT_BINARY_NAME} POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			${CMAKE_CURRENT_BINARY_DIR}/retro-voxel-display.exe
+			${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_BINARY_NAME}.exe
 			${CMAKE_SOURCE_DIR})
 else()
-	add_executable(retro-voxel-display ${SRCS})
+	add_executable(${PROJECT_BINARY_NAME} ${SRCS})
 endif()
 
-target_link_libraries(retro-voxel-display ${LIBS})
+target_link_libraries(${PROJECT_BINARY_NAME} ${LIBS})
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-	target_compile_definitions(retro-voxel-display PRIVATE DEBUG)
+	target_compile_definitions(${PROJECT_BINARY_NAME} PRIVATE DEBUG)
 endif()

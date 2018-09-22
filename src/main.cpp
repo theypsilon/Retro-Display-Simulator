@@ -264,11 +264,17 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+#ifndef PROJECT_VERSION
+#define PROJECT_VERSION "x.x.x"
+#define PROJECT_BINARY_NAME "noname"
+#define PROJECT_OFFICIAL_NAME "No Name Project"
+#endif
 
 ty::error program(int argc, char* argv[]) {
 #ifdef DEBUG
 	std::cout << "DEBUG on!" << std::endl;
 #endif
+	std::cout << "Starting " << PROJECT_OFFICIAL_NAME << " " << PROJECT_VERSION << std::endl;
 	std::srand(std::time(nullptr));	
 	auto animation_paths = animation_collection[std::rand() % animation_collection_size];
 	if (argc > 1) {
@@ -289,9 +295,11 @@ ty::error program(int argc, char* argv[]) {
 
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
-	auto video_mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	TRY_NOT_NULL(auto, video_mode, glfwGetVideoMode(glfwGetPrimaryMonitor()));
 	SCR_WIDTH = video_mode->width;
 	SCR_HEIGHT = video_mode->height;
+
+	std::cout << "Creating window with resolution " << SCR_WIDTH << "x" << SCR_HEIGHT << ".\n";
 
 	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Retro Voxel Display", NULL, NULL));
 	glfwSetWindowPos(window, 0, 0);

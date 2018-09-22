@@ -3,6 +3,8 @@
 #include <cassert>
 #include <windows.h>
 #include <shellapi.h>
+#include <theypsilon/error.h>
+#include <thread>
 
 LPSTR* CommandLineToArgvA(LPSTR lpCmdLine, INT *pNumArgs)
 {
@@ -75,7 +77,7 @@ LPSTR* CommandLineToArgvA(LPSTR lpCmdLine, INT *pNumArgs)
 	return result;
 }
 
-int main(int argc, char* argv[]);
+ty::error program(int argc, char* argv[]);
 
 int CALLBACK WinMain(
 	HINSTANCE   hInstance,
@@ -85,14 +87,21 @@ int CALLBACK WinMain(
 ) {
 	std::ofstream out;
 	try {
-		out.open("retro-voxel-display.log", std::ios::out | std::ios::trunc);
+		std::string logfile = std::string(PROJECT_BINARY_NAME) + "-" + std::string(PROJECT_VERSION) + ".log";
+		out.open(logfile.c_str(), std::ios::out | std::ios::trunc);
 		std::cout.rdbuf(out.rdbuf());
 		std::cerr.rdbuf(out.rdbuf());
 	}
 	catch (...) {}
 	int argc;
 	LPSTR * argv = CommandLineToArgvA(GetCommandLineA(), &argc);
-	auto result = main(argc, argv);
+	auto err = program(argc, argv);
 	LocalFree(argv);
-	return result;
+	if (err) {
+		std::cerr << "Ooops! Something went wrong!\n[ERROR] " << err.msg << "\nClosing program in 10 seconds.\n";
+		using namespace std::literals;
+		std::this_thread::sleep_for(10s);
+		return -1;
+	}
+	return 0;
 }
