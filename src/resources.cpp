@@ -81,13 +81,13 @@ ty::result<Image_Data> Image_Data::load(const char* path, int desired_channels) 
 	int width, height, nr_channels;
 #if DEBUG
 	auto data = stbi_load(FileSystem::getPath(path).c_str(), &width, &height, &nr_channels, desired_channels);
+#else
+	TRY_RESULT(auto, binary, get_binary_resource(path));
+	auto data = stbi_load_from_memory(binary.data, binary.length, &width, &height, &nr_channels, desired_channels);
+#endif
 	if (data == nullptr) {
 	    return ty::error{TY_INTERNAL_FILE_CTX + " image not found: " + path};
 	}
-#else
-	TRY_RESULT(auto, binary, get_binary_resource(path));
-	TRY_NOT_NULL(auto, data, stbi_load_from_memory(binary.data, binary.length, &width, &height, &nr_channels, desired_channels), path);
-#endif
 	Image_Data image{
 		data,
 		width, height, nr_channels

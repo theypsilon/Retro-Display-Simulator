@@ -11,4 +11,6 @@ make
 
 popd
 
-./build/retro-voxel-display $@
+BINARY_NAME="$(cat configuration/binary_name.var)"
+
+./build/${BINARY_NAME} $@

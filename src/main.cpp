@@ -21,11 +21,14 @@
 #include <ctime>
 
 #ifdef WIN32
+constexpr const bool on_windows = true;
 extern "C"
 {
 	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
+#else
+constexpr const bool on_windows = false;
 #endif
 
 #if defined (_MSC_VER)
@@ -70,6 +73,7 @@ struct Resources {
 	AnimationColors animation_colors;
     int image_width, image_height;
     int screen_width, screen_height;
+    bool full_screen;
 	unsigned int image_counter;
 	std::chrono::time_point<std::chrono::system_clock> image_tick;
     double last_mouse_x, last_mouse_y;
@@ -278,7 +282,7 @@ ty::error program(int argc, char* argv[]) {
 	std::cout << "DEBUG on!" << std::endl;
 #endif
 	std::cout << "Starting " << PROJECT_OFFICIAL_NAME << " " << PROJECT_VERSION << std::endl;
-	std::srand(unsigned int(std::time(nullptr)));	
+	std::srand((unsigned int)std::time(nullptr));	
 	auto animation_paths = animation_collection[std::rand() % animation_collection_size];
 	if (argc > 1) {
 		animation_paths = AnimationPaths{ { argv[1] } };
@@ -304,7 +308,7 @@ ty::error program(int argc, char* argv[]) {
 
 	std::cout << "Creating window with resolution " << screen_width << "x" << screen_height << ".\n";
 
-	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(screen_width, screen_height, PROJECT_OFFICIAL_NAME, NULL, NULL));
+	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(screen_width, screen_height, PROJECT_OFFICIAL_NAME, on_windows ? nullptr : glfwGetPrimaryMonitor(), nullptr));
 	glfwSetWindowPos(window, 0, 0);
 	//glfwSetWindowMonitor(window, nullptr, 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
 
@@ -490,6 +494,7 @@ ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int s
     res.image_height = image_height;
     res.screen_width = screen_width;
     res.screen_height = screen_height,
+    res.full_screen = false;
     res.image_counter = 0;
     res.image_tick = std::chrono::system_clock::now();
     res.last_mouse_x = -1;
@@ -615,10 +620,6 @@ ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int imag
 }
 
 ty::error update(const Input& input, Resources& res, float delta_time) {
-	res.buttons.f11.track(input.f11);
-	res.buttons.lalt.track(input.alt);
-	res.buttons.enter.track(input.enter);
-
     auto now = std::chrono::system_clock::now();
     if (now > res.last_time + std::chrono::seconds(1)) {
         std::cout << "FPS: " << res.ticks << std::endl;
