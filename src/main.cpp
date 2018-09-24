@@ -21,14 +21,14 @@
 #include <ctime>
 
 #ifdef WIN32
-constexpr const bool on_windows = true;
+const bool on_windows = true;
 extern "C"
 {
 	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
 #else
-constexpr const bool on_windows = false;
+const bool on_windows = false;
 #endif
 
 #if defined (_MSC_VER)
@@ -59,8 +59,13 @@ struct InfoResources {
 	bool showing_info;
 };
 
+struct Screen {
+	GLFWwindow* window;
+	int width, height, refresh_rate;
+};
+
 struct Resources {
-    GLFWwindow* window;
+    Screen screen;
     unsigned int ticks;
 	std::chrono::time_point<std::chrono::system_clock> last_time;
     Shader lighting_shader;
@@ -72,8 +77,6 @@ struct Resources {
     unsigned int colors_vbo;
 	AnimationColors animation_colors;
     int image_width, image_height;
-    int screen_width, screen_height;
-    bool full_screen;
 	unsigned int image_counter;
 	std::chrono::time_point<std::chrono::system_clock> image_tick;
     double last_mouse_x, last_mouse_y;
@@ -187,7 +190,7 @@ const float square_geometry[] = {
 };
 
 ty::error program(int argc, char* argv[]);
-ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int screen_height, const AnimationPaths& animation_paths);
+ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animation_paths);
 ty::result<InfoResources> load_info_resources();
 ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height);
 ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo);
@@ -303,16 +306,19 @@ ty::error program(int argc, char* argv[]) {
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
 	TRY_NOT_NULL(auto, video_mode, glfwGetVideoMode(glfwGetPrimaryMonitor()));
-	int screen_width = video_mode->width;
-	int screen_height = video_mode->height;
+	Screen screen;
+	screen.width = video_mode->width;
+	screen.height = video_mode->height;
+	screen.refresh_rate = video_mode->refreshRate;
 
-	std::cout << "Creating window with resolution " << screen_width << "x" << screen_height << ".\n";
+	std::cout << "Creating window with resolution " << screen.width << "x" << screen.height << "\n";
+	std::cout << "Max refresh rate " << screen.refresh_rate << "hz.\n";
 
-	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(screen_width, screen_height, PROJECT_OFFICIAL_NAME, on_windows ? nullptr : glfwGetPrimaryMonitor(), nullptr));
-	glfwSetWindowPos(window, 0, 0);
+	TRY_NOT_NULL(, screen.window, glfwCreateWindow(screen.width, screen.height, PROJECT_OFFICIAL_NAME, on_windows ? nullptr : glfwGetPrimaryMonitor(), nullptr));
+	glfwSetWindowPos(screen.window, 0, 0);
 	//glfwSetWindowMonitor(window, nullptr, 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
 
-	glfwMakeContextCurrent(window);
+	glfwMakeContextCurrent(screen.window);
 	TRY_NON_NEG(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress));
 
 	GLint major, minor;
@@ -329,27 +335,27 @@ ty::error program(int argc, char* argv[]) {
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
 
-	TRY_RESULT(auto, res, load_resources(window, screen_width, screen_height, animation_paths));
+	TRY_RESULT(auto, res, load_resources(screen, animation_paths));
 
 	Input input;
 
-	glfwSetWindowUserPointer(window, &input);
-	glfwSetCursorPosCallback(window, [](GLFWwindow* window, double xpos, double ypos) {
+	glfwSetWindowUserPointer(res.screen.window, &input);
+	glfwSetCursorPosCallback(res.screen.window, [](GLFWwindow* window, double xpos, double ypos) {
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
 		input.mouse_motion_x = xpos;
 		input.mouse_motion_y = ypos;
 	});
-	glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int key, int action, ATTR_UNUSED int mods) {
+	glfwSetMouseButtonCallback(res.screen.window, [](GLFWwindow* window, int key, int action, ATTR_UNUSED int mods) {
 		if (key != GLFW_MOUSE_BUTTON_LEFT || action == GLFW_REPEAT) return;
 
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
 		input.mouse_click_left = action == GLFW_PRESS ? true : false;
 	});
-	glfwSetScrollCallback(window, [](GLFWwindow* window, ATTR_UNUSED double xoffset, double yoffset) {
+	glfwSetScrollCallback(res.screen.window, [](GLFWwindow* window, ATTR_UNUSED double xoffset, double yoffset) {
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
 		input.mouse_scroll_y = yoffset;
 	});
-	glfwSetKeyCallback(window, [](GLFWwindow* window, int key, ATTR_UNUSED int scancode, int action, ATTR_UNUSED int mods) {
+	glfwSetKeyCallback(res.screen.window, [](GLFWwindow* window, int key, ATTR_UNUSED int scancode, int action, ATTR_UNUSED int mods) {
 		if (action == GLFW_REPEAT) return;
 
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
@@ -389,16 +395,19 @@ ty::error program(int argc, char* argv[]) {
         }
 	});
 
-	float delta_time = 0.0f;
+	const int frame_length_us = 1000000 / screen.refresh_rate;
 	auto last_time = std::chrono::system_clock::now();
-	while (input.escape == false && glfwWindowShouldClose(window) == false) {
-		auto current_time = std::chrono::system_clock::now();
-		delta_time = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count() / 1000000.0f;
-		last_time = current_time;
+	while (input.escape == false && glfwWindowShouldClose(res.screen.window) == false) {
+		const auto current_time = std::chrono::system_clock::now();
+		const auto time_since_last_frame_us = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count();
+		const long long int time_diff = frame_length_us - time_since_last_frame_us;
+		if (time_diff > 0) continue;
+		const auto delta_time = double(time_since_last_frame_us) / 1000000.0;
+		last_time = current_time - std::chrono::microseconds(time_diff);
 
-		TRY_ERROR(update(input, res, delta_time));
+		TRY_ERROR(update(input, res, float(delta_time)));
 
-		glfwSwapBuffers(window);
+		glfwSwapBuffers(res.screen.window);
 		glfwPollEvents();
 
 		TRY_NOT_GL_ERROR();
@@ -407,7 +416,7 @@ ty::error program(int argc, char* argv[]) {
 	RETURN_OK;
 }
 
-ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int screen_height, const AnimationPaths& animation_paths) {
+ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animation_paths) {
     int image_width = 0, image_height = 0;
 
     unsigned int voxel_vao;
@@ -479,7 +488,7 @@ ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int s
 	TRY_RESULT(auto, info_panel, load_info_resources());
 
 	Resources res{};
-    res.window = window;
+    res.screen = screen;
     res.ticks = 0;
     res.last_time = std::chrono::system_clock::now();
     res.lighting_shader = std::move(lighting_shader);
@@ -492,9 +501,6 @@ ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int s
 	res.animation_colors = AnimationColors{ std::move(colors_by_image), animation_paths.milliseconds };
     res.image_width = image_width;
     res.image_height = image_height;
-    res.screen_width = screen_width;
-    res.screen_height = screen_height,
-    res.full_screen = false;
     res.image_counter = 0;
     res.image_tick = std::chrono::system_clock::now();
     res.last_mouse_x = -1;
@@ -755,7 +761,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
     auto voxel_gap = glm::vec2{1 + res.cur_voxel_gap, 1 + res.cur_voxel_gap};
 
-    glm::mat4 projection = glm::perspective(glm::radians(float(res.camera_zoom)), (float)res.screen_width / (float)res.screen_height, 1.0f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(float(res.camera_zoom)), (float)res.screen.width / (float)res.screen.height, 1.0f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.info_panel.info_mixer += delta_time * 0.1f;
