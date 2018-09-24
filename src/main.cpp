@@ -22,11 +22,6 @@
 
 #ifdef WIN32
 const bool on_windows = true;
-extern "C"
-{
-	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
-	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
 #else
 const bool on_windows = false;
 #endif
@@ -132,61 +127,61 @@ struct Input {
 
 const long double ratio_4_3 = 4.0 / 3.0;
 const long double ratio_256_224 = 256.0 / 224.0;
-const float snes_factor_horizontal = 1.166666666666666666666667f; //ratio_4_3 / ratio_256_224;
-const float snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
+
+const double snes_factor_horizontal = ratio_4_3 / ratio_256_224;
 
 const float cube_geometry[] = {
-    // cube coordinates                                           cube normals
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f,  0.0f, -1.0f,
+    // cube coordinates       cube normals
+    -0.5f, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+     0.5f, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+     0.5f,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+     0.5f,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+    -0.5f,  0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
+    -0.5f, -0.5f, -0.5f,      0.0f,  0.0f, -1.0f,
 
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
 
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      -1.0f,  0.0f,  0.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,      -1.0f,  0.0f,  0.0f,
 
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      1.0f,  0.0f,  0.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,      1.0f,  0.0f,  0.0f,
 
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f, -1.0f,  0.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical, -0.5f,      0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f,      0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f,      0.0f, -1.0f,  0.0f,
 
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  1.0f,  0.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical, -0.5f,      0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,      0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f,      0.0f,  1.0f,  0.0f,
 };
 
 const float square_geometry[] = {
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-     0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-     0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-    -0.5f * snes_factor_horizontal,  0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
-    -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+     0.5f,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f,  0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
+    -0.5f, -0.5f,  0.5f,      0.0f,  0.0f,  1.0f,
 };
 
 ty::error program(int argc, char* argv[]);
@@ -197,20 +192,6 @@ ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int imag
 ty::error update(const Input& input, Resources& res, float delta_time);
 
 const AnimationPaths animation_collection[] = {
-/*	AnimationPaths{{"resources/textures/snes2.png"}},
-	AnimationPaths{{"resources/textures/snes3.png"}},
-	AnimationPaths{{"resources/textures/snes4.png"}},
-	AnimationPaths{{"resources/textures/snes.png"}},
-	AnimationPaths{{
-        "resources/textures/voxel_chronotrigger1.png",
-        "resources/textures/voxel_chronotrigger2.png",
-        "resources/textures/voxel_chronotrigger3.png",
-        "resources/textures/voxel_chronotrigger4.png",
-//        "resources/textures/voxel_chronotrigger1.png",
-//        "resources/textures/voxel_chronotrigger6.png",
-//        "resources/textures/voxel_chronotrigger7.png",
-//        "resources/textures/voxel_chronotrigger8.png",
-    }},*/
 	AnimationPaths{{
 		"resources/textures/wwix_00.png",
         "resources/textures/wwix_01.png",
@@ -295,13 +276,13 @@ ty::error program(int argc, char* argv[]) {
 	TRY_IS_TRUE(glfwInit());
 	atexit(glfwTerminate);
 
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	glfwWindowHint(GLFW_DOUBLEBUFFER, 1);
+	glfwWindowHint(GLFW_DOUBLEBUFFER, 2);
 	glfwWindowHint(GLFW_DEPTH_BITS, 24);
-	//SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
+	//glfwWindowHint(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
 
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
@@ -316,7 +297,6 @@ ty::error program(int argc, char* argv[]) {
 
 	TRY_NOT_NULL(, screen.window, glfwCreateWindow(screen.width, screen.height, PROJECT_OFFICIAL_NAME, on_windows ? nullptr : glfwGetPrimaryMonitor(), nullptr));
 	glfwSetWindowPos(screen.window, 0, 0);
-	//glfwSetWindowMonitor(window, nullptr, 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
 
 	glfwMakeContextCurrent(screen.window);
 	TRY_NON_NEG(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress));
@@ -441,7 +421,7 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
 	TRY_ERROR(load_image_on_gpu(colors_by_image[0], image_width, image_height, colors_vbo));
 
     float voxel_scale = 1.0f;
-    float half_width = float(image_width) / 2.0f * voxel_scale * snes_factor_horizontal;
+    float half_width = float(image_width) / 2.0f * voxel_scale;
     float half_height = float(image_height) / 2.0f * voxel_scale;
 
     int offset_multiplier = 1;
@@ -449,7 +429,7 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
     std::vector<glm::vec2> offsets(image_width * image_height);
     for (int j = 0; j < image_height; j++) {
         for (int i = 0; i < image_width; i++) {
-            float x = i * voxel_scale * snes_factor_horizontal - half_width;
+            float x = i * voxel_scale - half_width;
             float y = j * voxel_scale - half_height;
             offsets[j * image_width + i] = glm::vec2(x * offset_multiplier, y * offset_multiplier);
         }
@@ -754,12 +734,17 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
     auto width = res.image_width;
     auto height = res.image_height;
 	auto voxel_scale = glm::vec3{
-        res.cur_voxel_scale_x + 1,
+	    res.cur_voxel_scale_x + 1,
         res.cur_voxel_scale_y + 1,
         (res.cur_voxel_scale_x + res.cur_voxel_scale_x)/2 + 1
     };
 
-    auto voxel_gap = glm::vec2{1 + res.cur_voxel_gap, 1 + res.cur_voxel_gap};
+    auto voxel_gap = glm::vec2{1.0 + res.cur_voxel_gap, 1 + res.cur_voxel_gap};
+
+    if (res.image_width % 256 == 0 && res.image_height % 224 == 0) {
+        voxel_scale.x /= snes_factor_horizontal;
+        voxel_gap.x *= snes_factor_horizontal;
+    }
 
     glm::mat4 projection = glm::perspective(glm::radians(float(res.camera_zoom)), (float)res.screen.width / (float)res.screen.height, 1.0f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();

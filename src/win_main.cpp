@@ -79,7 +79,6 @@ LPSTR* CommandLineToArgvA(LPSTR lpCmdLine, INT *pNumArgs)
 
 ty::error program(int argc, char* argv[]);
 
-
 int CALLBACK WinMain(
 	HINSTANCE   hInstance,
 	HINSTANCE   hPrevInstance,
@@ -94,14 +93,46 @@ int CALLBACK WinMain(
 		std::cerr.rdbuf(out.rdbuf());
 	}
 	catch (...) {}
+	char* argv_aux[2];
 	int argc;
 	LPSTR * argv = CommandLineToArgvA(GetCommandLineA(), &argc);
+	if (argc < 2) {
+		int msgboxID = MessageBox(
+			NULL,
+			"Do you want to load the default animation?\n\nClick 'No' for selecting a custom picture from your system.",
+			PROJECT_OFFICIAL_NAME,
+			MB_ICONQUESTION | MB_YESNO
+		);
+
+		char szFile[100];
+		if (msgboxID == IDNO)
+		{
+			OPENFILENAME ofn;
+			ZeroMemory(&ofn, sizeof(ofn));
+			ofn.lStructSize = sizeof(ofn);
+			ofn.hwndOwner = NULL;
+			ofn.lpstrFile = szFile;
+			ofn.lpstrFile[0] = '\0';
+			ofn.nMaxFile = sizeof(szFile);
+			ofn.lpstrFilter = "Pictures\0*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic\0";
+			ofn.nFilterIndex = 1;
+			ofn.lpstrFileTitle = NULL;
+			ofn.nMaxFileTitle = 0;
+			ofn.lpstrInitialDir = NULL;
+			ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+			if (GetOpenFileName(&ofn)) {
+				argc = 2;
+				argv = argv_aux;
+				argv[1] = szFile;
+			}
+		}
+	}
 	auto err = program(argc, argv);
 	LocalFree(argv);
 	if (err) {
 		std::cerr << "[ERROR] " << err.msg;
 		MessageBoxA(
-			NULL, 
+			NULL, //err.msg.c_str(),
 			"Some unexpected error happened.\nMake sure you have installed the graphic drivers correctly.\nIf the problem persists, contact the author at:\ntheypsilon@gmail.com",
 			"Message", 
 			MB_OK | MB_ICONERROR

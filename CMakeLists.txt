@@ -7,6 +7,7 @@ set(PROJECT_VERSION 0.1.0)
 set(PROJECT_OFFICIAL_NAME "Retro Voxel Display")
 set(PROJECT_BINARY_NAME rvd)
 
+
 add_definitions( -DPROJECT_VERSION="${PROJECT_VERSION}" -DPROJECT_OFFICIAL_NAME="${PROJECT_OFFICIAL_NAME}" -DPROJECT_BINARY_NAME="${PROJECT_BINARY_NAME}")
 configure_file(configuration/version.txt.in ${CMAKE_SOURCE_DIR}/configuration/version.var)
 configure_file(configuration/binary_name.txt.in ${CMAKE_SOURCE_DIR}/configuration/binary_name.var)
@@ -25,6 +26,7 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL  "GLFW lib only" )
 set( GLFW_BUILD_TESTS OFF CACHE BOOL  "GLFW lib only" )
 set( GLFW_BUILD_DOCS OFF CACHE BOOL  "GLFW lib only" )
 set( GLFW_BUILD_INSTALL OFF CACHE BOOL  "GLFW lib only" )
+set( GLFW_USE_HYBRID_HPG ON CACHE INTERNAL "GLFW use hybrid HPG.")
 
 add_subdirectory( glfw )
 
