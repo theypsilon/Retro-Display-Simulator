@@ -25,12 +25,12 @@ rcedit build\release\%binary_name%.exe^
     --set-version-string "Comments" "Ping the creator at theypsilon@gmail.com"^
 	--set-version-string "ProductName" "%project_name%"^
 	--set-version-string "LegalCopyright" "GNU GPLv3"^
-	--set-version-string "CompanyName" "José Manuel Barroso Galindo"^
+	--set-version-string "CompanyName" "Josï¿½ Manuel Barroso Galindo"^
 	--set-file-version %version%^
 	--set-product-version %version%^
 	--set-icon cubes.ico || goto :error
 
-copy build\release\%binary_name%.exe releases\%filename% > nuls || goto :error
+copy build\release\%binary_name%.exe releases\%filename% > nul || goto :error
 
 echo Created file %filename% on releases folder.
 goto :EOF

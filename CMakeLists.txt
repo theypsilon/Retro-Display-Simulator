@@ -28,7 +28,7 @@ set( GLFW_BUILD_INSTALL OFF CACHE BOOL  "GLFW lib only" )
 
 add_subdirectory( glfw )
 
-set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl -lstdc++fs")
+set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE}") # -ldl
 
 configure_file(configuration/root_directory.h.in configuration/root_directory.h)
 include_directories(${CMAKE_BINARY_DIR}/configuration)
@@ -58,4 +58,9 @@ target_link_libraries(${PROJECT_BINARY_NAME} ${LIBS})
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
 	target_compile_definitions(${PROJECT_BINARY_NAME} PRIVATE DEBUG)
+endif()
+
+if  (MSVC)
+else()
+	target_compile_options(${PROJECT_BINARY_NAME} PRIVATE -Wall -Wextra -pedantic)
 endif()

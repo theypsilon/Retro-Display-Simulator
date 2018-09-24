@@ -28,6 +28,12 @@ extern "C"
 }
 #endif
 
+#if defined (_MSC_VER)
+#define ATTR_UNUSED
+#else
+#define ATTR_UNUSED __attribute__((unused))
+#endif
+
 struct InternalButtons {
 	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels;
 };
@@ -57,20 +63,20 @@ struct Resources {
     Shader lighting_shader;
 	InfoResources info_panel;
 	ty::Camera camera;
-	float camera_zoom;
+	double camera_zoom;
     unsigned int voxel_vao;
     unsigned int voxel_vbo;
     unsigned int colors_vbo;
 	AnimationColors animation_colors;
     int image_width, image_height;
+    int screen_width, screen_height;
 	unsigned int image_counter;
 	std::chrono::time_point<std::chrono::system_clock> image_tick;
     double last_mouse_x, last_mouse_y;
 	double last_scroll_y;
-    float cur_voxel_scale_x;
-    float cur_voxel_scale_y;
-    float cur_voxel_gap;
-    bool full_screen;
+    double cur_voxel_scale_x;
+	double cur_voxel_scale_y;
+	double cur_voxel_gap;
 	float voxels_pulse;
 	bool showing_waves;
     bool showing_voxels;
@@ -119,8 +125,8 @@ struct Input {
 
 const long double ratio_4_3 = 4.0 / 3.0;
 const long double ratio_256_224 = 256.0 / 224.0;
-const long double snes_factor_horizontal = 1.1666666666666666666666666667; //ratio_4_3 / ratio_256_224;
-const long double snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
+const float snes_factor_horizontal = 1.166666666666666666666667f; //ratio_4_3 / ratio_256_224;
+const float snes_factor_vertical = 1.0; //1.0 / snes_factor_horizontal;
 
 const float cube_geometry[] = {
     // cube coordinates                                           cube normals
@@ -176,11 +182,8 @@ const float square_geometry[] = {
     -0.5f * snes_factor_horizontal, -0.5f * snes_factor_vertical,  0.5f,      0.0f,  0.0f,  1.0f,
 };
 
-unsigned int SCR_WIDTH  = 1920;
-unsigned int SCR_HEIGHT = 1080;
-
 ty::error program(int argc, char* argv[]);
-ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& animation_paths);
+ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int screen_height, const AnimationPaths& animation_paths);
 ty::result<InfoResources> load_info_resources();
 ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height);
 ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo);
@@ -275,7 +278,7 @@ ty::error program(int argc, char* argv[]) {
 	std::cout << "DEBUG on!" << std::endl;
 #endif
 	std::cout << "Starting " << PROJECT_OFFICIAL_NAME << " " << PROJECT_VERSION << std::endl;
-	std::srand(std::time(nullptr));	
+	std::srand(unsigned int(std::time(nullptr)));	
 	auto animation_paths = animation_collection[std::rand() % animation_collection_size];
 	if (argc > 1) {
 		animation_paths = AnimationPaths{ { argv[1] } };
@@ -296,12 +299,12 @@ ty::error program(int argc, char* argv[]) {
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
 	TRY_NOT_NULL(auto, video_mode, glfwGetVideoMode(glfwGetPrimaryMonitor()));
-	SCR_WIDTH = video_mode->width;
-	SCR_HEIGHT = video_mode->height;
+	int screen_width = video_mode->width;
+	int screen_height = video_mode->height;
 
-	std::cout << "Creating window with resolution " << SCR_WIDTH << "x" << SCR_HEIGHT << ".\n";
+	std::cout << "Creating window with resolution " << screen_width << "x" << screen_height << ".\n";
 
-	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, PROJECT_OFFICIAL_NAME, NULL, NULL));
+	TRY_NOT_NULL(GLFWwindow*, window, glfwCreateWindow(screen_width, screen_height, PROJECT_OFFICIAL_NAME, NULL, NULL));
 	glfwSetWindowPos(window, 0, 0);
 	//glfwSetWindowMonitor(window, nullptr, 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
 
@@ -322,7 +325,7 @@ ty::error program(int argc, char* argv[]) {
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
 
-	TRY_RESULT(auto, res, load_resources(window, animation_paths));
+	TRY_RESULT(auto, res, load_resources(window, screen_width, screen_height, animation_paths));
 
 	Input input;
 
@@ -332,17 +335,17 @@ ty::error program(int argc, char* argv[]) {
 		input.mouse_motion_x = xpos;
 		input.mouse_motion_y = ypos;
 	});
-	glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int key, int action, int mods) {
+	glfwSetMouseButtonCallback(window, [](GLFWwindow* window, int key, int action, ATTR_UNUSED int mods) {
 		if (key != GLFW_MOUSE_BUTTON_LEFT || action == GLFW_REPEAT) return;
 
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
 		input.mouse_click_left = action == GLFW_PRESS ? true : false;
 	});
-	glfwSetScrollCallback(window, [](GLFWwindow* window, double xoffset, double yoffset) {
+	glfwSetScrollCallback(window, [](GLFWwindow* window, ATTR_UNUSED double xoffset, double yoffset) {
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
 		input.mouse_scroll_y = yoffset;
 	});
-	glfwSetKeyCallback(window, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+	glfwSetKeyCallback(window, [](GLFWwindow* window, int key, ATTR_UNUSED int scancode, int action, ATTR_UNUSED int mods) {
 		if (action == GLFW_REPEAT) return;
 
 		auto& input = *static_cast<Input*>(glfwGetWindowUserPointer(window));
@@ -382,8 +385,6 @@ ty::error program(int argc, char* argv[]) {
         }
 	});
 
-
-
 	float delta_time = 0.0f;
 	auto last_time = std::chrono::system_clock::now();
 	while (input.escape == false && glfwWindowShouldClose(window) == false) {
@@ -402,8 +403,8 @@ ty::error program(int argc, char* argv[]) {
 	RETURN_OK;
 }
 
-ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& animation_paths) {
-    int image_width = 0, image_height = 0, image_nr_channels = 0;
+ty::result<Resources> load_resources(GLFWwindow* window, int screen_width, int screen_height, const AnimationPaths& animation_paths) {
+    int image_width = 0, image_height = 0;
 
     unsigned int voxel_vao;
     glGenVertexArrays(1, &voxel_vao);
@@ -487,6 +488,8 @@ ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& a
 	res.animation_colors = AnimationColors{ std::move(colors_by_image), animation_paths.milliseconds };
     res.image_width = image_width;
     res.image_height = image_height;
+    res.screen_width = screen_width;
+    res.screen_height = screen_height,
     res.image_counter = 0;
     res.image_tick = std::chrono::system_clock::now();
     res.last_mouse_x = -1;
@@ -495,7 +498,6 @@ ty::result<Resources> load_resources(GLFWwindow* window, const AnimationPaths& a
     res.cur_voxel_scale_x = 0.0f;
     res.cur_voxel_scale_y = 0.0f;
     res.cur_voxel_gap = 0.0f;
-    res.full_screen = false;
 	res.voxels_pulse = 0.0f;
     res.showing_waves = false;
     res.showing_voxels = false;
@@ -616,10 +618,6 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 	res.buttons.f11.track(input.f11);
 	res.buttons.lalt.track(input.alt);
 	res.buttons.enter.track(input.enter);
-    if (res.buttons.f11.just_pressed() || res.buttons.enter.just_pressed() && res.buttons.lalt || res.buttons.enter && res.buttons.lalt.just_pressed()) {
-		glfwSetWindowMonitor(res.window, res.full_screen ? nullptr : glfwGetPrimaryMonitor(), 0, 0, SCR_WIDTH, SCR_HEIGHT, GLFW_DONT_CARE);
-        res.full_screen = !res.full_screen;
-    }
 
     auto now = std::chrono::system_clock::now();
     if (now > res.last_time + std::chrono::seconds(1)) {
@@ -665,53 +663,53 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 	}
 
 	res.buttons.speed_up.track(input.speed_up);
-    if (res.buttons.speed_up.just_pressed())
-        res.camera.movement_speed *= 1.5f;
+    if (res.buttons.speed_up.just_pressed()) {
+        res.camera.movement_speed *= 1.5f; }
 
 	res.buttons.speed_down.track(input.speed_down);
-    if (res.buttons.speed_down.just_pressed())
-        res.camera.movement_speed /= 1.5f;
+    if (res.buttons.speed_down.just_pressed()) {
+        res.camera.movement_speed /= 1.5f; }
 
-    if (res.camera.movement_speed > 10000)
-        res.camera.movement_speed = 10000;
-    if (res.camera.movement_speed < 0.1)
-        res.camera.movement_speed = 0.1f;
+    if (res.camera.movement_speed > 10000) {
+        res.camera.movement_speed = 10000; }
+    if (res.camera.movement_speed < 0.1) {
+        res.camera.movement_speed = 0.1f; }
 
-    if (input.increase_voxel_scale_x)
-        res.cur_voxel_scale_x += 0.005f * delta_time * res.camera.movement_speed;
-    if (input.decrease_voxel_scale_x)
-        res.cur_voxel_scale_x -= 0.005f * delta_time * res.camera.movement_speed;
-    if (res.cur_voxel_scale_x <= 0)
-        res.cur_voxel_scale_x = 0;
+    if (input.increase_voxel_scale_x) {
+        res.cur_voxel_scale_x += 0.005 * delta_time * res.camera.movement_speed; }
+    if (input.decrease_voxel_scale_x) {
+        res.cur_voxel_scale_x -= 0.005 * delta_time * res.camera.movement_speed; }
+    if (res.cur_voxel_scale_x <= 0) {
+        res.cur_voxel_scale_x = 0; }
 
-	if (input.increase_voxel_scale_y)
-		res.cur_voxel_scale_y += 0.005f * delta_time * res.camera.movement_speed;
-	if (input.decrease_voxel_scale_y)
-		res.cur_voxel_scale_y -= 0.005f * delta_time * res.camera.movement_speed;
-	if (res.cur_voxel_scale_y <= 0)
-		res.cur_voxel_scale_y = 0;
+	if (input.increase_voxel_scale_y) {
+		res.cur_voxel_scale_y += 0.005 * delta_time * res.camera.movement_speed; }
+	if (input.decrease_voxel_scale_y) {
+		res.cur_voxel_scale_y -= 0.005 * delta_time * res.camera.movement_speed; }
+	if (res.cur_voxel_scale_y <= 0) {
+		res.cur_voxel_scale_y = 0; }
 
-    if (input.increase_voxel_gap)
-        res.cur_voxel_gap += 0.005f * delta_time * res.camera.movement_speed;
-    if (input.decrease_voxel_gap)
-        res.cur_voxel_gap -= 0.005f * delta_time * res.camera.movement_speed;
-    if (res.cur_voxel_gap <= 0)
-        res.cur_voxel_gap = 0;
+    if (input.increase_voxel_gap) {
+        res.cur_voxel_gap += 0.005 * delta_time * res.camera.movement_speed; }
+    if (input.decrease_voxel_gap) {
+        res.cur_voxel_gap -= 0.005 * delta_time * res.camera.movement_speed; }
+    if (res.cur_voxel_gap <= 0) {
+        res.cur_voxel_gap = 0; }
 
-    if (input.turn_up      ) res.camera.Turn(ty::CameraDirection::UP, delta_time);
-    if (input.turn_down    ) res.camera.Turn(ty::CameraDirection::DOWN, delta_time);
-    if (input.turn_left    ) res.camera.Turn(ty::CameraDirection::LEFT, delta_time);
-    if (input.turn_right   ) res.camera.Turn(ty::CameraDirection::RIGHT, delta_time);
+    if (input.turn_up      ) { res.camera.Turn(ty::CameraDirection::UP, delta_time); }
+    if (input.turn_down    ) { res.camera.Turn(ty::CameraDirection::DOWN, delta_time); }
+    if (input.turn_left    ) { res.camera.Turn(ty::CameraDirection::LEFT, delta_time); }
+    if (input.turn_right   ) { res.camera.Turn(ty::CameraDirection::RIGHT, delta_time); }
 
-    if (input.walk_up      ) res.camera.Advance(ty::CameraDirection::UP, delta_time);
-    if (input.walk_down    ) res.camera.Advance(ty::CameraDirection::DOWN, delta_time);
-    if (input.walk_forward ) res.camera.Advance(ty::CameraDirection::FORWARD, delta_time);
-    if (input.walk_backward) res.camera.Advance(ty::CameraDirection::BACKWARD, delta_time);
-    if (input.walk_left    ) res.camera.Advance(ty::CameraDirection::LEFT, delta_time);
-    if (input.walk_right   ) res.camera.Advance(ty::CameraDirection::RIGHT, delta_time);
+    if (input.walk_up      ) { res.camera.Advance(ty::CameraDirection::UP, delta_time); }
+    if (input.walk_down    ) { res.camera.Advance(ty::CameraDirection::DOWN, delta_time); }
+    if (input.walk_forward ) { res.camera.Advance(ty::CameraDirection::FORWARD, delta_time); }
+    if (input.walk_backward) { res.camera.Advance(ty::CameraDirection::BACKWARD, delta_time); }
+    if (input.walk_left    ) { res.camera.Advance(ty::CameraDirection::LEFT, delta_time); }
+    if (input.walk_right   ) { res.camera.Advance(ty::CameraDirection::RIGHT, delta_time); }
 
-    if (input.rotate_left  ) res.camera.Rotate(ty::CameraDirection::LEFT, delta_time);
-    if (input.rotate_right ) res.camera.Rotate(ty::CameraDirection::RIGHT, delta_time);
+    if (input.rotate_left  ) { res.camera.Rotate(ty::CameraDirection::LEFT, delta_time); }
+    if (input.rotate_right ) { res.camera.Rotate(ty::CameraDirection::RIGHT, delta_time); }
 
 	if (res.last_scroll_y < 0) {
 		res.last_scroll_y = input.mouse_scroll_y;
@@ -719,12 +717,12 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 		double scroll_diff = input.mouse_scroll_y - res.last_scroll_y;
 		res.last_scroll_y = input.mouse_scroll_y;
 
-		if (res.camera_zoom >= 1.0f && res.camera_zoom <= 45.0f)
-			res.camera_zoom -= scroll_diff;
-		if (res.camera_zoom <= 1.0f)
-			res.camera_zoom = 1.0f;
-		if (res.camera_zoom >= 45.0f)
-			res.camera_zoom = 45.0f;
+		if (res.camera_zoom >= 1.0f && res.camera_zoom <= 45.0f) {
+			res.camera_zoom -= scroll_diff; }
+		if (res.camera_zoom <= 1.0f) {
+			res.camera_zoom = 1.0f; }
+		if (res.camera_zoom >= 45.0f) {
+			res.camera_zoom = 45.0f; }
 	}
 
     if (input.mouse_click_left || input.space) {
@@ -756,7 +754,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
     auto voxel_gap = glm::vec2{1 + res.cur_voxel_gap, 1 + res.cur_voxel_gap};
 
-    glm::mat4 projection = glm::perspective(glm::radians(res.camera_zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 1.0f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(float(res.camera_zoom)), (float)res.screen_width / (float)res.screen_height, 1.0f, 100000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.info_panel.info_mixer += delta_time * 0.1f;

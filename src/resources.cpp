@@ -80,7 +80,10 @@ ty::result<Image_Data> Image_Data::load(const char* path, int desired_channels) 
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
 	int width, height, nr_channels;
 #if DEBUG
-	TRY_NOT_NULL(auto, data, stbi_load(FileSystem::getPath(path).c_str(), &width, &height, &nr_channels, desired_channels), path);
+	auto data = stbi_load(FileSystem::getPath(path).c_str(), &width, &height, &nr_channels, desired_channels);
+	if (data == nullptr) {
+	    return ty::error{TY_INTERNAL_FILE_CTX + " image not found: " + path};
+	}
 #else
 	TRY_RESULT(auto, binary, get_binary_resource(path));
 	TRY_NOT_NULL(auto, data, stbi_load_from_memory(binary.data, binary.length, &width, &height, &nr_channels, desired_channels), path);
@@ -147,8 +150,6 @@ ty::result<Shader> Shader::load_shader(const char* vertexFilename, const char* f
 #endif
 	// 2. compile shaders
 	unsigned int vertex, fragment;
-	int success;
-	char infoLog[512];
 	// vertex shader
 	vertex = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertex, 1, &vShaderCode, NULL);
