@@ -588,7 +588,7 @@ ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector
 					((float)data[index + 0]) / 255.0f,
 					((float)data[index + 1]) / 255.0f,
 					((float)data[index + 2]) / 255.0f,
-					((float)data[index + 3]) / 255.0f
+					current_image.nr_channels > 3 ? ((float)data[index + 3]) / 255.0f : 1.0f
 				};
 				index += current_image.nr_channels;
 			}
@@ -758,7 +758,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 		res.voxels_pulse = 0;
 	}
 
-	glClearColor(0.02f, 0.02f, 0.02f, 1.0f);
+	glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     TRY_ERROR(res.lighting_shader.use());

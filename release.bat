@@ -28,7 +28,7 @@ rcedit build\release\%binary_name%.exe^
 	--set-version-string "CompanyName" "Jos� Manuel Barroso Galindo"^
 	--set-file-version %version%^
 	--set-product-version %version%^
-	--set-icon cubes.ico || goto :error
+	--set-icon icon72.ico || goto :error
 
 copy build\release\%binary_name%.exe releases\%filename% > nul || goto :error
 
