@@ -85,6 +85,8 @@ int CALLBACK WinMain(
 	LPSTR       lpCmdLine,
 	int         nCmdShow
 ) {
+	int argc;
+	LPSTR * argv = CommandLineToArgvA(GetCommandLineA(), &argc);
 	std::ofstream out;
 	try {
 		std::string logfile = std::string(PROJECT_BINARY_NAME) + "-" + std::string(PROJECT_VERSION) + ".log";
@@ -93,9 +95,7 @@ int CALLBACK WinMain(
 		std::cerr.rdbuf(out.rdbuf());
 	}
 	catch (...) {}
-	char* argv_aux[2];
-	int argc;
-	LPSTR * argv = CommandLineToArgvA(GetCommandLineA(), &argc);
+	std::string selected_picture = "";
 	if (argc < 2) {
 		int msgboxID = MessageBox(
 			NULL,
@@ -104,7 +104,7 @@ int CALLBACK WinMain(
 			MB_ICONQUESTION | MB_YESNO
 		);
 
-		char szFile[100];
+		char szFile[256];
 		if (msgboxID == IDNO)
 		{
 			OPENFILENAME ofn;
@@ -121,16 +121,22 @@ int CALLBACK WinMain(
 			ofn.lpstrInitialDir = NULL;
 			ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 			if (GetOpenFileName(&ofn)) {
-				argc = 2;
-				argv = argv_aux;
-				argv[1] = szFile;
+				selected_picture = szFile;
 			}
 		}
 	}
-	auto err = program(argc, argv);
+	auto err = ty::error::none();
+	if (selected_picture.empty()) {
+		err = program(argc, argv);
+	} else {
+		char* fake_argv[2];
+		fake_argv[0] = argv[0];
+		fake_argv[1] = const_cast<char*>(selected_picture.c_str());
+		err = program(2, fake_argv);
+	}
 	LocalFree(argv);
 	if (err) {
-		std::cerr << "[ERROR] " << err.msg;
+		std::cerr << "[ERROR] " << err.message();
 		MessageBoxA(
 			NULL, //err.msg.c_str(),
 			"Some unexpected error happened.\nMake sure you have installed the graphic drivers correctly.\nIf the problem persists, contact the author at:\ntheypsilon@gmail.com",

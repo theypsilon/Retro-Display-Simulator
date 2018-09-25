@@ -33,6 +33,10 @@ namespace ty {
 		{
 			return _justPressed;
 		}
+
+		bool is_pressed() const noexcept {
+			return _activated;
+		}
 	};
 }
 

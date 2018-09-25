@@ -33,7 +33,7 @@ const bool on_windows = false;
 #endif
 
 struct InternalButtons {
-	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels;
+	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels, mouse_click;
 };
 
 struct AnimationPaths {
@@ -62,7 +62,8 @@ struct Screen {
 struct Resources {
     Screen screen;
     unsigned int ticks;
-	std::chrono::time_point<std::chrono::system_clock> last_time;
+    std::chrono::time_point<std::chrono::high_resolution_clock> now;
+	std::chrono::time_point<std::chrono::high_resolution_clock> last_time;
     Shader lighting_shader;
 	InfoResources info_panel;
 	ty::Camera camera;
@@ -73,9 +74,8 @@ struct Resources {
 	AnimationColors animation_colors;
     int image_width, image_height;
 	unsigned int image_counter;
-	std::chrono::time_point<std::chrono::system_clock> image_tick;
+	std::chrono::time_point<std::chrono::high_resolution_clock> image_tick;
     double last_mouse_x, last_mouse_y;
-	double last_scroll_y;
     double cur_voxel_scale_x;
 	double cur_voxel_scale_y;
 	double cur_voxel_gap;
@@ -122,7 +122,7 @@ struct Input {
 		change_waving = false;
     double mouse_motion_x = -1;
     double mouse_motion_y = -1;
-	double mouse_scroll_y = -1;
+	double mouse_scroll_y = 0;
 };
 
 const long double ratio_4_3 = 4.0 / 3.0;
@@ -194,45 +194,45 @@ ty::error update(const Input& input, Resources& res, float delta_time);
 const AnimationPaths animation_collection[] = {
 	AnimationPaths{{
 		"resources/textures/wwix_00.png",
-        "resources/textures/wwix_01.png",
-        "resources/textures/wwix_02.png",
-        "resources/textures/wwix_03.png",
-        "resources/textures/wwix_04.png",
-        "resources/textures/wwix_05.png",
-        "resources/textures/wwix_06.png",
-        "resources/textures/wwix_07.png",
-        "resources/textures/wwix_08.png",
-        "resources/textures/wwix_09.png",
-        "resources/textures/wwix_10.png",
-        "resources/textures/wwix_11.png",
-        "resources/textures/wwix_12.png",
-        "resources/textures/wwix_13.png",
-        "resources/textures/wwix_14.png",
-        "resources/textures/wwix_15.png",
-        "resources/textures/wwix_16.png",
-        "resources/textures/wwix_17.png",
-        "resources/textures/wwix_18.png",
-        "resources/textures/wwix_19.png",
-        "resources/textures/wwix_20.png",
-        "resources/textures/wwix_21.png",
-        "resources/textures/wwix_22.png",
-        "resources/textures/wwix_23.png",
-        "resources/textures/wwix_24.png",
-        "resources/textures/wwix_25.png",
-        "resources/textures/wwix_26.png",
-        "resources/textures/wwix_27.png",
-        "resources/textures/wwix_28.png",
-        "resources/textures/wwix_29.png",
-        "resources/textures/wwix_30.png",
-        "resources/textures/wwix_31.png",
-        "resources/textures/wwix_32.png",
-        "resources/textures/wwix_33.png",
-        "resources/textures/wwix_34.png",
-        "resources/textures/wwix_35.png",
-        "resources/textures/wwix_36.png",
-        "resources/textures/wwix_37.png",
-        "resources/textures/wwix_38.png",
-        "resources/textures/wwix_39.png",
+		"resources/textures/wwix_01.png",
+		"resources/textures/wwix_02.png",
+		"resources/textures/wwix_03.png",
+		"resources/textures/wwix_04.png",
+		"resources/textures/wwix_05.png",
+		"resources/textures/wwix_06.png",
+		"resources/textures/wwix_07.png",
+		"resources/textures/wwix_08.png",
+		"resources/textures/wwix_09.png",
+		"resources/textures/wwix_10.png",
+		"resources/textures/wwix_11.png",
+		"resources/textures/wwix_12.png",
+		"resources/textures/wwix_13.png",
+		"resources/textures/wwix_14.png",
+		"resources/textures/wwix_15.png",
+		"resources/textures/wwix_16.png",
+		"resources/textures/wwix_17.png",
+		"resources/textures/wwix_18.png",
+		"resources/textures/wwix_19.png",
+		"resources/textures/wwix_20.png",
+		"resources/textures/wwix_21.png",
+		"resources/textures/wwix_22.png",
+		"resources/textures/wwix_23.png",
+		"resources/textures/wwix_24.png",
+		"resources/textures/wwix_25.png",
+		"resources/textures/wwix_26.png",
+		"resources/textures/wwix_27.png",
+		"resources/textures/wwix_28.png",
+		"resources/textures/wwix_29.png",
+		"resources/textures/wwix_30.png",
+		"resources/textures/wwix_31.png",
+		"resources/textures/wwix_32.png",
+		"resources/textures/wwix_33.png",
+		"resources/textures/wwix_34.png",
+		"resources/textures/wwix_35.png",
+		"resources/textures/wwix_36.png",
+		"resources/textures/wwix_37.png",
+		"resources/textures/wwix_38.png",
+		"resources/textures/wwix_39.png",
 		"resources/textures/wwix_40.png",
 		"resources/textures/wwix_41.png",
 		"resources/textures/wwix_42.png",
@@ -247,7 +247,7 @@ auto animation_collection_size = sizeof(animation_collection) / sizeof(animation
 int main(int argc, char* argv[]) {
 	auto err = program(argc, argv);
 	if (err) {
-		std::cerr << "Ooops! Something went wrong!\n[ERROR] " << err.msg << "\nClosing program in 10 seconds.\n";
+		std::cerr << "Ooops! Something went wrong!\n[ERROR] " << err.message() << "\nClosing program in 10 seconds.\n";
 		using namespace std::literals;
 		std::this_thread::sleep_for(10s);
 		return -1;
@@ -276,13 +276,13 @@ ty::error program(int argc, char* argv[]) {
 	TRY_IS_TRUE(glfwInit());
 	atexit(glfwTerminate);
 
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	glfwWindowHint(GLFW_DOUBLEBUFFER, 2);
 	glfwWindowHint(GLFW_DEPTH_BITS, 24);
-	//glfwWindowHint(SDL_GL_ACCELERATED_VISUAL, 1); // It doesn't work combined with MSAA, I don't know why.
+	//glfwWindowHint(SDL_GL_ACCELERATED_VISUAL, 1); // I don't know what is the proper alternative in GLFW.
 
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
@@ -310,14 +310,14 @@ ty::error program(int argc, char* argv[]) {
 	printf("GL Version (integer) : %d.%d\n", major, minor);
 	printf("GLSL Version : %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_DEPTH_TEST);
 
-	TRY_RESULT(auto, res, load_resources(screen, animation_paths));
-
 	Input input;
+	
+	TRY_RESULT(auto, res, load_resources(screen, animation_paths));
 
 	glfwSetWindowUserPointer(res.screen.window, &input);
 	glfwSetCursorPosCallback(res.screen.window, [](GLFWwindow* window, double xpos, double ypos) {
@@ -376,16 +376,18 @@ ty::error program(int argc, char* argv[]) {
 	});
 
 	const int frame_length_us = 1000000 / screen.refresh_rate;
-	auto last_time = std::chrono::system_clock::now();
+	auto last_time = res.now;
 	while (input.escape == false && glfwWindowShouldClose(res.screen.window) == false) {
-		const auto current_time = std::chrono::system_clock::now();
-		const auto time_since_last_frame_us = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_time).count();
+		res.now = std::chrono::high_resolution_clock::now();
+		const auto time_since_last_frame_us = std::chrono::duration_cast<std::chrono::microseconds>(res.now - last_time).count();
 		const long long int time_diff = frame_length_us - time_since_last_frame_us;
 		if (time_diff > 0) continue;
 		const auto delta_time = double(time_since_last_frame_us) / 1000000.0;
-		last_time = current_time - std::chrono::microseconds(time_diff);
+		last_time = res.now - std::chrono::microseconds(time_diff);
 
 		TRY_ERROR(update(input, res, float(delta_time)));
+
+		input.mouse_scroll_y = 0;
 
 		glfwSwapBuffers(res.screen.window);
 		glfwPollEvents();
@@ -470,7 +472,8 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
 	Resources res{};
     res.screen = screen;
     res.ticks = 0;
-    res.last_time = std::chrono::system_clock::now();
+    res.now = std::chrono::high_resolution_clock::now();
+    res.last_time = res.now;
     res.lighting_shader = std::move(lighting_shader);
 	res.info_panel = std::move(info_panel);
 	res.camera = std::move(camera);
@@ -482,10 +485,9 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
     res.image_width = image_width;
     res.image_height = image_height;
     res.image_counter = 0;
-    res.image_tick = std::chrono::system_clock::now();
+    res.image_tick = res.now;
     res.last_mouse_x = -1;
     res.last_mouse_y = -1;
-	res.last_scroll_y = -1;
     res.cur_voxel_scale_x = 0.0f;
     res.cur_voxel_scale_y = 0.0f;
     res.cur_voxel_gap = 0.0f;
@@ -606,15 +608,15 @@ ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int imag
 }
 
 ty::error update(const Input& input, Resources& res, float delta_time) {
-    auto now = std::chrono::system_clock::now();
-    if (now > res.last_time + std::chrono::seconds(1)) {
+    if (res.now > res.last_time + std::chrono::seconds(1)) {
         std::cout << "FPS: " << res.ticks << std::endl;
-        res.last_time = now;
+        res.last_time = res.now;
         res.ticks = 0;
     }
+	res.ticks++;
 
-    if (res.animation_colors.colors_by_image.size() > 1 && now > res.image_tick + std::chrono::milliseconds(res.animation_colors.milliseconds)) {
-        res.image_tick = now;
+    if (res.animation_colors.colors_by_image.size() > 1 && res.now > res.image_tick + std::chrono::milliseconds(res.animation_colors.milliseconds)) {
+        res.image_tick = res.now;
 
         res.image_counter++;
         if (res.image_counter >= res.animation_colors.colors_by_image.size()) {
@@ -698,21 +700,18 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
     if (input.rotate_left  ) { res.camera.Rotate(ty::CameraDirection::LEFT, delta_time); }
     if (input.rotate_right ) { res.camera.Rotate(ty::CameraDirection::RIGHT, delta_time); }
 
-	if (res.last_scroll_y < 0) {
-		res.last_scroll_y = input.mouse_scroll_y;
-	} else if (res.last_scroll_y != input.mouse_scroll_y) {
-		double scroll_diff = input.mouse_scroll_y - res.last_scroll_y;
-		res.last_scroll_y = input.mouse_scroll_y;
-
+	if (input.mouse_scroll_y != 0) {
 		if (res.camera_zoom >= 1.0f && res.camera_zoom <= 45.0f) {
-			res.camera_zoom -= scroll_diff; }
+			res.camera_zoom -= input.mouse_scroll_y; }
 		if (res.camera_zoom <= 1.0f) {
 			res.camera_zoom = 1.0f; }
 		if (res.camera_zoom >= 45.0f) {
 			res.camera_zoom = 45.0f; }
 	}
 
-    if (input.mouse_click_left || input.space) {
+	res.buttons.mouse_click.track(input.mouse_click_left || input.space);
+    if (res.buttons.mouse_click.is_pressed()) {
+		glfwSetInputMode(res.screen.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         if (res.last_mouse_x < 0) {
             res.last_mouse_x = input.mouse_motion_x;
             res.last_mouse_y = input.mouse_motion_y;
@@ -726,7 +725,9 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
 			res.camera.Drag(xoffset, yoffset);
 		}
-    } else {
+	}
+	if (res.buttons.mouse_click.just_released()) {
+		glfwSetInputMode(res.screen.window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         res.last_mouse_x = -1;
         res.last_mouse_y = -1;
     }
@@ -757,9 +758,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 		res.voxels_pulse = 0;
 	}
 
-	res.ticks++;
-
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClearColor(0.02f, 0.02f, 0.02f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     TRY_ERROR(res.lighting_shader.use());

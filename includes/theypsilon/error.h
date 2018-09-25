@@ -4,6 +4,7 @@
 #include <string>
 #include <iostream>
 #include <variant>
+#include <optional>
 
 #define TY_INTERNAL_FILE_CTX std::string(__FILE__) + "@" + std::to_string(__LINE__) + ": "
 
@@ -65,18 +66,21 @@ namespace ty {
 	struct error {
 	private:
 		explicit error() noexcept {}
+		std::optional<std::string> err;
 	public:
 		static error none() noexcept {
 			return error{};
 		}
-		explicit error(std::string message) noexcept : msg{ message } {
-			if (msg.empty()) { // breakpoint
-				msg = "returned error with empty message"; 
+		explicit error(std::string message) noexcept : err{ message } {
+			if (message.empty()) { // breakpoint
+				err = "returned error with empty message";
 			}
 		}
-		std::string msg;
+		std::string message() const noexcept {
+			return err.value_or("");
+		}
 		operator bool() const noexcept {
-			return msg.empty() == false;
+			return err.has_value();
 		}
 	};
 
