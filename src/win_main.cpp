@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <theypsilon/error.h>
-#include <thread>
+#include <functional>
 
 LPSTR* CommandLineToArgvA(LPSTR lpCmdLine, INT *pNumArgs)
 {
@@ -86,7 +86,7 @@ int CALLBACK WinMain(
 	int         nCmdShow
 ) {
 	int argc;
-	LPSTR * argv = CommandLineToArgvA(GetCommandLineA(), &argc);
+	auto argv = std::unique_ptr<LPSTR, std::function<void(LPSTR*)>>(CommandLineToArgvA(GetCommandLineA(), &argc), LocalFree);
 	std::ofstream out;
 	try {
 		std::string logfile = std::string(PROJECT_BINARY_NAME) + "-" + std::string(PROJECT_VERSION) + ".log";
@@ -101,7 +101,7 @@ int CALLBACK WinMain(
 			NULL,
 			"Do you want to load the default animation?\n\nClick 'No' for selecting a custom picture from your system.",
 			PROJECT_OFFICIAL_NAME,
-			MB_ICONQUESTION | MB_YESNO
+			MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON1
 		);
 
 		char szFile[256];
@@ -120,21 +120,24 @@ int CALLBACK WinMain(
 			ofn.nMaxFileTitle = 0;
 			ofn.lpstrInitialDir = NULL;
 			ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-			if (GetOpenFileName(&ofn)) {
-				selected_picture = szFile;
+			if (!GetOpenFileName(&ofn)) {
+				return 0;
 			}
+			selected_picture = szFile;
+		}
+		else if (msgboxID == IDCANCEL) {
+			return 0;
 		}
 	}
 	auto err = ty::error::none();
 	if (selected_picture.empty()) {
-		err = program(argc, argv);
+		err = program(argc, argv.get());
 	} else {
 		char* fake_argv[2];
-		fake_argv[0] = argv[0];
+		fake_argv[0] = argv.get()[0];
 		fake_argv[1] = const_cast<char*>(selected_picture.c_str());
 		err = program(2, fake_argv);
 	}
-	LocalFree(argv);
 	if (err) {
 		std::cerr << "[ERROR] " << err.message();
 		MessageBoxA(
