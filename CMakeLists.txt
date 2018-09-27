@@ -1,6 +1,6 @@
 project ( retro-voxel-display )
 
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.5)
 message(CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE})
 
 set(PROJECT_VERSION 0.1.0)
