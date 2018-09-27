@@ -4,7 +4,7 @@
 
 Download latest release from here:
 
-[rds-0.1.0.exe](releases/rds-0.1.0.exe)
+[rds-0.1.0.exe](https://github.com/theypsilon/Retro-Display-Simulator/raw/master/releases/rds-0.1.0.exe)
 
 ## On Linux
 
