@@ -2,6 +2,6 @@
 .vs
 build
 configuration/*.var
-*.exe
+/*.exe
 CMakeSettings.json
 CppProperties.json
