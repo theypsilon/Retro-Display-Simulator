@@ -302,7 +302,7 @@ ty::error program(int argc, char* argv[]) {
 	std::cout << "Creating window with resolution " << screen.width << "x" << screen.height << "\n";
 	std::cout << "Max refresh rate " << screen.refresh_rate << "hz.\n";
 
-	TRY_NOT_NULL(, screen.window, glfwCreateWindow(screen.width, screen.height, PROJECT_OFFICIAL_NAME, on_windows ? nullptr : glfwGetPrimaryMonitor(), nullptr));
+	TRY_NOT_NULL(, screen.window, glfwCreateWindow(screen.width, screen.height, PROJECT_OFFICIAL_NAME, on_windows && screen.height >= 2160 ? nullptr : glfwGetPrimaryMonitor(), nullptr));
 	glfwSetWindowPos(screen.window, 0, 0);
 
 	glfwMakeContextCurrent(screen.window);
@@ -375,9 +375,9 @@ ty::error program(int argc, char* argv[]) {
     			case (GLFW_KEY_F1)        :input.f1                       = activation; break;
     			case (GLFW_KEY_F11)       :input.f11                      = activation; break;
     			case (GLFW_KEY_LEFT_ALT)  :input.left_alt                 = activation; break;
-				case (GLFW_KEY_RIGHT_ALT)  :input.right_alt                 = activation; break;
-				case (GLFW_KEY_LEFT_CONTROL): input.left_ctrl             = activation; break;
-    			case (GLFW_KEY_RIGHT_CONTROL): input.right_ctrl             = activation; break;
+			case (GLFW_KEY_RIGHT_ALT)  :input.right_alt               = activation; break;
+			case (GLFW_KEY_LEFT_CONTROL): input.left_ctrl             = activation; break;
+    			case (GLFW_KEY_RIGHT_CONTROL): input.right_ctrl           = activation; break;
     			case (GLFW_KEY_ENTER)     :input.enter                    = activation; break;
     			case (GLFW_KEY_C)         :input.change_view              = activation; break;
     			case (GLFW_KEY_P)         :input.change_waving            = activation; break;

@@ -1,9 +1,17 @@
 #include "resources.h"
 #include "resources_binaries.h"
-#include <learnopengl/filesystem.h>
 #include <stb_image.h>
 #include <fstream>
 #include <sstream>
+#include "cmake_source_dir.h"
+
+std::string get_path(const char* path) {
+	if (FILE *file = fopen(path, "r")) {
+		fclose(file);
+		return path;
+	}
+	return std::string{ cmake_source_dir } + "/" + path;
+}
 
 
 struct binary_resource {
@@ -80,12 +88,12 @@ ty::result<Image_Data> Image_Data::load(const char* path, int desired_channels) 
     stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
 	int width, height, nr_channels;
 #if DEBUG
-	auto data = stbi_load(FileSystem::getPath(path).c_str(), &width, &height, &nr_channels, desired_channels);
+	auto data = stbi_load(get_path(path).c_str(), &width, &height, &nr_channels, desired_channels);
 #else
 	auto binary = get_binary_resource(path);
 	auto data = binary.is_ok() ? 
 		stbi_load_from_memory(binary.get_ref().data, binary.get_ref().length, &width, &height, &nr_channels, desired_channels) :
-		stbi_load(FileSystem::getPath(path).c_str(), &width, &height, &nr_channels, desired_channels) ;
+		stbi_load(get_path(path).c_str(), &width, &height, &nr_channels, desired_channels) ;
 #endif
 	if (data == nullptr) {
 	    return ty::error{TY_INTERNAL_FILE_CTX + " image not found: " + path};
@@ -98,7 +106,7 @@ ty::result<Image_Data> Image_Data::load(const char* path, int desired_channels) 
 }
 
 ty::result<std::string> get_shader_from_file(const char* path) {
-	auto vertexPathString = FileSystem::getPath(path);
+	auto vertexPathString = get_path(path);
 	auto vertexPath = vertexPathString.c_str();
 	// 1. retrieve the vertex/fragment source code from filePath
 	std::string vertexCode;

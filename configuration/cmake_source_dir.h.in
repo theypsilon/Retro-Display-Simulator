@@ -1,0 +1,1 @@
+const char * cmake_source_dir = "${CMAKE_SOURCE_DIR}";

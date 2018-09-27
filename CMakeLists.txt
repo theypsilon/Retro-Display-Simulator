@@ -32,7 +32,7 @@ add_subdirectory( glfw )
 
 set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE}") # -ldl
 
-configure_file(configuration/root_directory.h.in configuration/root_directory.h)
+configure_file(configuration/cmake_source_dir.h.in configuration/cmake_source_dir.h)
 include_directories(${CMAKE_BINARY_DIR}/configuration)
 include_directories("${CMAKE_SOURCE_DIR}/includes/")
 
