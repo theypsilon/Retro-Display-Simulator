@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <memory>
 #include <windows.h>
 #include <shellapi.h>
 #include <theypsilon/error.h>
@@ -89,8 +90,9 @@ int CALLBACK WinMain(
 	auto argv = std::unique_ptr<LPSTR, std::function<void(LPSTR*)>>(CommandLineToArgvA(GetCommandLineA(), &argc), LocalFree);
 	std::ofstream out;
 	try {
-		std::string logfile = std::string(PROJECT_BINARY_NAME) + "-" + std::string(PROJECT_VERSION) + ".log";
-		out.open(logfile.c_str(), std::ios::out | std::ios::trunc);
+		auto exe_path = std::string{ argv.get()[0] };
+		auto log_path = exe_path.substr(0, exe_path.find_last_of(".")) + ".log";
+		out.open(log_path.c_str(), std::ios::out | std::ios::trunc);
 		std::cout.rdbuf(out.rdbuf());
 		std::cerr.rdbuf(out.rdbuf());
 	}

@@ -36,13 +36,15 @@ struct InternalButtons {
 	ty::boolean_button speed_up, speed_down, f1, f11, lalt, enter, waving, swap_voxels_to_pixels, mouse_click;
 };
 
-struct AnimationPaths {
+struct AnimationDescriptor {
     std::vector<const char*> paths;
     int milliseconds = 100;
 };
 
-struct AnimationColors {
+struct AnimationData {
 	std::vector<std::vector<glm::vec4>> colors_by_image;
+	int width;
+	int height;
 	int milliseconds;
 };
 
@@ -68,11 +70,11 @@ struct Resources {
 	InfoResources info_panel;
 	ty::Camera camera;
 	double camera_zoom;
+	double pixel_manipulation_speed;
     unsigned int voxel_vao;
     unsigned int voxel_vbo;
     unsigned int colors_vbo;
-	AnimationColors animation_colors;
-    int image_width, image_height;
+	AnimationData animation;
 	unsigned int image_counter;
 	std::chrono::time_point<std::chrono::high_resolution_clock> image_tick;
     double last_mouse_x, last_mouse_y;
@@ -94,10 +96,6 @@ struct Input {
 		walk_down = false,
 		walk_forward = false,
 		walk_backward = false,
-		look_left = false,
-		look_right = false,
-		look_up = false,
-		look_down = false,
 		turn_up = false,
 		turn_down = false,
 		turn_left = false,
@@ -111,10 +109,14 @@ struct Input {
 		decrease_voxel_scale_x = false,
         increase_voxel_gap = false,
         decrease_voxel_gap = false,
+        reset_speeds = false,
 		mouse_click_left = false,
 		f1 = false,
 		f11 = false,
-		alt = false,
+		left_alt = false,
+		right_alt = false,
+		left_ctrl = false,
+		right_ctrl = false,
 		enter = false,
 		speed_up = false,
 		speed_down = false,
@@ -129,6 +131,9 @@ const long double ratio_4_3 = 4.0 / 3.0;
 const long double ratio_256_224 = 256.0 / 224.0;
 
 const double snes_factor_horizontal = ratio_4_3 / ratio_256_224;
+const float pixel_manipulation_base_speed = 20.0;
+const float turning_base_speed = 1.0;
+const float movement_speed_factor = 50.0;
 
 const float cube_geometry[] = {
     // cube coordinates       cube normals
@@ -185,14 +190,16 @@ const float square_geometry[] = {
 };
 
 ty::error program(int argc, char* argv[]);
-ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animation_paths);
+ty::result<Resources> load_resources(Screen screen, const AnimationDescriptor& animation_descriptor);
 ty::result<InfoResources> load_info_resources();
-ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height);
+ty::result<AnimationData> load_animation(const AnimationDescriptor& paths);
 ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo);
 ty::error update(const Input& input, Resources& res, float delta_time);
 
-const AnimationPaths animation_collection[] = {
-	AnimationPaths{{
+double get_far_away_position(const AnimationData &animation);
+
+const AnimationDescriptor animation_collection[] = {
+	AnimationDescriptor{{
 		"resources/textures/wwix_00.png",
 		"resources/textures/wwix_01.png",
 		"resources/textures/wwix_02.png",
@@ -267,11 +274,11 @@ ty::error program(int argc, char* argv[]) {
 #endif
 	std::cout << "Starting " << PROJECT_OFFICIAL_NAME << " " << PROJECT_VERSION << std::endl;
 	std::srand((unsigned int)std::time(nullptr));	
-	auto animation_paths = animation_collection[std::rand() % animation_collection_size];
+	auto animation_descriptor = animation_collection[std::rand() % animation_collection_size];
 	if (argc > 1) {
-		animation_paths = AnimationPaths{ { argv[1] } };
+		animation_descriptor = AnimationDescriptor{ { argv[1] } };
 	}
-	std::cout << "Playing image '" << animation_paths.paths[0] << "'.\n";
+	std::cout << "Playing image '" << animation_descriptor.paths[0] << "'.\n";
 
 	TRY_IS_TRUE(glfwInit());
 	atexit(glfwTerminate);
@@ -317,7 +324,7 @@ ty::error program(int argc, char* argv[]) {
 
 	Input input;
 	
-	TRY_RESULT(auto, res, load_resources(screen, animation_paths));
+	TRY_RESULT(auto, res, load_resources(screen, animation_descriptor));
 
 	glfwSetWindowUserPointer(res.screen.window, &input);
 	glfwSetCursorPosCallback(res.screen.window, [](GLFWwindow* window, double xpos, double ypos) {
@@ -364,9 +371,13 @@ ty::error program(int argc, char* argv[]) {
     			case (GLFW_KEY_M)         :input.decrease_voxel_gap       = activation; break;
     			case (GLFW_KEY_F)         :input.speed_up                 = activation; break;
     			case (GLFW_KEY_R)         :input.speed_down               = activation; break;
+    			case (GLFW_KEY_T)         :input.reset_speeds             = activation; break;
     			case (GLFW_KEY_F1)        :input.f1                       = activation; break;
     			case (GLFW_KEY_F11)       :input.f11                      = activation; break;
-    			case (GLFW_KEY_LEFT_ALT)  :input.alt                      = activation; break;
+    			case (GLFW_KEY_LEFT_ALT)  :input.left_alt                 = activation; break;
+				case (GLFW_KEY_RIGHT_ALT)  :input.right_alt                 = activation; break;
+				case (GLFW_KEY_LEFT_CONTROL): input.left_ctrl             = activation; break;
+    			case (GLFW_KEY_RIGHT_CONTROL): input.right_ctrl             = activation; break;
     			case (GLFW_KEY_ENTER)     :input.enter                    = activation; break;
     			case (GLFW_KEY_C)         :input.change_view              = activation; break;
     			case (GLFW_KEY_P)         :input.change_waving            = activation; break;
@@ -398,9 +409,7 @@ ty::error program(int argc, char* argv[]) {
 	RETURN_OK;
 }
 
-ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animation_paths) {
-    int image_width = 0, image_height = 0;
-
+ty::result<Resources> load_resources(Screen screen, const AnimationDescriptor& animation_descriptor) {
     unsigned int voxel_vao;
     glGenVertexArrays(1, &voxel_vao);
     glBindVertexArray(voxel_vao);
@@ -419,21 +428,19 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
 
     unsigned int colors_vbo;
     glGenBuffers(1, &colors_vbo);
-    TRY_RESULT(auto, colors_by_image, load_animation(animation_paths.paths, image_width, image_height));
-	TRY_ERROR(load_image_on_gpu(colors_by_image[0], image_width, image_height, colors_vbo));
 
-    float voxel_scale = 1.0f;
-    float half_width = float(image_width) / 2.0f * voxel_scale;
-    float half_height = float(image_height) / 2.0f * voxel_scale;
+    TRY_RESULT(auto, animation, load_animation(animation_descriptor));
+	TRY_ERROR(load_image_on_gpu(animation.colors_by_image[0], animation.width, animation.height, colors_vbo));
 
-    int offset_multiplier = 1;
+    float half_width = float(animation.width) / 2.0f;
+    float half_height = float(animation.height) / 2.0f;
 
-    std::vector<glm::vec2> offsets(image_width * image_height);
-    for (int j = 0; j < image_height; j++) {
-        for (int i = 0; i < image_width; i++) {
-            float x = i * voxel_scale - half_width;
-            float y = j * voxel_scale - half_height;
-            offsets[j * image_width + i] = glm::vec2(x * offset_multiplier, y * offset_multiplier);
+    std::vector<glm::vec2> offsets(animation.width * animation.height);
+    for (int j = 0; j < animation.height; j++) {
+        for (int i = 0; i < animation.width; i++) {
+            float x = i - half_width;
+            float y = j - half_height;
+            offsets[j * animation.width + i] = glm::vec2(x, y);
         }
     }
 
@@ -446,7 +453,7 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
     unsigned int offsets_vbo;
     glGenBuffers(1, &offsets_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, offsets_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * image_width * image_height, offsets.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * animation.width * animation.height, offsets.data(), GL_STATIC_DRAW);
 
     // offset attribute
     glEnableVertexAttribArray(3);
@@ -463,9 +470,12 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
 
 	TRY_NOT_GL_ERROR();
 
+	double far_away_position = get_far_away_position(animation);
+
 	ty::Camera camera{};
-	camera.movement_speed *= 5;
-	camera.SetPosition(glm::vec3{ 0.0f, 0.0f, 270.0f * offset_multiplier });
+	camera.turning_speed = turning_base_speed;
+	camera.movement_speed *= int(far_away_position / movement_speed_factor);
+	camera.SetPosition(glm::vec3{ 0.0f, 0.0f, float(far_away_position) });
 
 	TRY_RESULT(auto, info_panel, load_info_resources());
 
@@ -478,12 +488,11 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
 	res.info_panel = std::move(info_panel);
 	res.camera = std::move(camera);
 	res.camera_zoom = 45.0f;
+	res.pixel_manipulation_speed = pixel_manipulation_base_speed;
     res.voxel_vao = voxel_vao;
     res.voxel_vbo = voxel_vbo;
     res.colors_vbo = colors_vbo;
-	res.animation_colors = AnimationColors{ std::move(colors_by_image), animation_paths.milliseconds };
-    res.image_width = image_width;
-    res.image_height = image_height;
+	res.animation = std::move(animation);
     res.image_counter = 0;
     res.image_tick = res.now;
     res.last_mouse_x = -1;
@@ -497,6 +506,12 @@ ty::result<Resources> load_resources(Screen screen, const AnimationPaths& animat
     return res;
 }
 
+double get_far_away_position(const AnimationData &animation) {
+	const auto far_factor = 112.0 / 270.0;
+	const auto far_away_position = (double(animation.height) / 2.0) / far_factor;
+	return far_away_position;
+}
+
 ty::result<InfoResources> load_info_resources() {
 	InfoResources info_res;
 
@@ -506,9 +521,9 @@ ty::result<InfoResources> load_info_resources() {
 	float vertices_info[] = {
 		// positions          // colors           // texture coords
 		1.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f, // top right
-		1.0f,  -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
-		0.75f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
-		0.75f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
+		1.0f,  -1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+		0.6875f, -1.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f, // bottom left
+		0.6875f,  1.0f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f  // top left 
 	};
 	unsigned int indices_info[] = {
 		0, 1, 3, // first triangle
@@ -569,9 +584,11 @@ ty::result<InfoResources> load_info_resources() {
 	return info_res;
 }
 
-ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector<const char*>& paths, int& image_width, int& image_height) {
+ty::result<AnimationData> load_animation(const AnimationDescriptor& descriptor) {
 	std::vector<std::vector<glm::vec4>> colors_by_image;
-	for (auto path : paths) {
+	int image_width = 0;
+	int image_height = 0;
+	for (auto path : descriptor.paths) {
 		TRY_RESULT(auto, current_image, Image_Data::load(path, 0));
 		if (image_width == 0 && image_height == 0) {
 			image_width = current_image.width;
@@ -595,7 +612,7 @@ ty::result<std::vector<std::vector<glm::vec4>>> load_animation(const std::vector
 		}
 		colors_by_image.emplace_back(std::move(colors));
 	}
-	return colors_by_image;
+	return AnimationData{ std::move(colors_by_image), image_width, image_height, descriptor.milliseconds };
 }
 
 ty::error load_image_on_gpu(const std::vector<glm::vec4>& colors, const int image_width, const int image_height, const unsigned int colors_vbo) {
@@ -615,15 +632,15 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
     }
 	res.ticks++;
 
-    if (res.animation_colors.colors_by_image.size() > 1 && res.now > res.image_tick + std::chrono::milliseconds(res.animation_colors.milliseconds)) {
+    if (res.animation.colors_by_image.size() > 1 && res.now > res.image_tick + std::chrono::milliseconds(res.animation.milliseconds)) {
         res.image_tick = res.now;
 
         res.image_counter++;
-        if (res.image_counter >= res.animation_colors.colors_by_image.size()) {
+        if (res.image_counter >= res.animation.colors_by_image.size()) {
             res.image_counter = 0;
         }
 
-        TRY_ERROR(load_image_on_gpu(res.animation_colors.colors_by_image[res.image_counter], res.image_width, res.image_height, res.colors_vbo));
+        TRY_ERROR(load_image_on_gpu(res.animation.colors_by_image[res.image_counter], res.animation.width, res.animation.height, res.colors_vbo));
     }
 
 	res.buttons.waving.track(input.change_waving);
@@ -651,37 +668,55 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 		res.info_panel.showing_info = !res.info_panel.showing_info;
 	}
 
-	res.buttons.speed_up.track(input.speed_up);
-    if (res.buttons.speed_up.just_pressed()) {
-        res.camera.movement_speed *= 1.5f; }
+	if (input.reset_speeds) {
+		res.camera.movement_speed = get_far_away_position(res.animation) / movement_speed_factor;
+		res.camera.turning_speed = turning_base_speed;
+		res.pixel_manipulation_speed = pixel_manipulation_base_speed;
+	}
 
+	res.buttons.speed_up.track(input.speed_up);
 	res.buttons.speed_down.track(input.speed_down);
-    if (res.buttons.speed_down.just_pressed()) {
-        res.camera.movement_speed /= 1.5f; }
+	if (input.left_alt || input.right_alt) {
+		if (res.buttons.speed_up.just_pressed()  ) { res.camera.turning_speed *= 1.5f; }
+		if (res.buttons.speed_down.just_pressed()) { res.camera.turning_speed /= 1.5f; }
+	} else if (input.left_ctrl || input.right_ctrl) {
+		if (res.buttons.speed_up.just_pressed()) { res.pixel_manipulation_speed *= 1.5f; }
+		if (res.buttons.speed_down.just_pressed()) { res.pixel_manipulation_speed /= 1.5f; }
+	} else {
+		if (res.buttons.speed_up.just_pressed()) { res.camera.movement_speed *= 1.5f; }
+		if (res.buttons.speed_down.just_pressed()) { res.camera.movement_speed /= 1.5f; }
+	}
 
     if (res.camera.movement_speed > 10000) {
         res.camera.movement_speed = 10000; }
     if (res.camera.movement_speed < 0.1) {
         res.camera.movement_speed = 0.1f; }
 
+	if (res.camera.turning_speed > 10000) {
+		res.camera.turning_speed = 10000;
+	}
+	if (res.camera.turning_speed < 0.1) {
+		res.camera.turning_speed = 0.1f;
+	}
+
     if (input.increase_voxel_scale_x) {
-        res.cur_voxel_scale_x += 0.005 * delta_time * res.camera.movement_speed; }
+        res.cur_voxel_scale_x += 0.005 * delta_time * res.pixel_manipulation_speed; }
     if (input.decrease_voxel_scale_x) {
-        res.cur_voxel_scale_x -= 0.005 * delta_time * res.camera.movement_speed; }
+        res.cur_voxel_scale_x -= 0.005 * delta_time * res.pixel_manipulation_speed; }
     if (res.cur_voxel_scale_x <= 0) {
         res.cur_voxel_scale_x = 0; }
 
 	if (input.increase_voxel_scale_y) {
-		res.cur_voxel_scale_y += 0.005 * delta_time * res.camera.movement_speed; }
+		res.cur_voxel_scale_y += 0.005 * delta_time * res.pixel_manipulation_speed; }
 	if (input.decrease_voxel_scale_y) {
-		res.cur_voxel_scale_y -= 0.005 * delta_time * res.camera.movement_speed; }
+		res.cur_voxel_scale_y -= 0.005 * delta_time * res.pixel_manipulation_speed; }
 	if (res.cur_voxel_scale_y <= 0) {
 		res.cur_voxel_scale_y = 0; }
 
     if (input.increase_voxel_gap) {
-        res.cur_voxel_gap += 0.005 * delta_time * res.camera.movement_speed; }
+        res.cur_voxel_gap += 0.005 * delta_time * res.pixel_manipulation_speed; }
     if (input.decrease_voxel_gap) {
-        res.cur_voxel_gap -= 0.005 * delta_time * res.camera.movement_speed; }
+        res.cur_voxel_gap -= 0.005 * delta_time * res.pixel_manipulation_speed; }
     if (res.cur_voxel_gap <= 0) {
         res.cur_voxel_gap = 0; }
 
@@ -732,8 +767,8 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
         res.last_mouse_y = -1;
     }
 
-    auto width = res.image_width;
-    auto height = res.image_height;
+    auto width = res.animation.width;
+    auto height = res.animation.height;
 	auto voxel_scale = glm::vec3{
 	    res.cur_voxel_scale_x + 1,
         res.cur_voxel_scale_y + 1,
@@ -742,12 +777,12 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
     auto voxel_gap = glm::vec2{1.0 + res.cur_voxel_gap, 1 + res.cur_voxel_gap};
 
-    if (res.image_width % 256 == 0 && res.image_height % 224 == 0) {
+    if (res.animation.width % 256 == 0 && res.animation.height % 224 == 0) {
         voxel_scale.x /= snes_factor_horizontal;
         voxel_gap.x *= snes_factor_horizontal;
     }
 
-    glm::mat4 projection = glm::perspective(glm::radians(float(res.camera_zoom)), (float)res.screen.width / (float)res.screen.height, 1.0f, 100000.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(float(res.camera_zoom)), (float)res.screen.width / (float)res.screen.height, 0.01f, 10000.0f);
     glm::mat4 view = res.camera.GetViewMatrix();
 
     res.info_panel.info_mixer += delta_time * 0.1f;
@@ -773,7 +808,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
     // world transformation
     glBindVertexArray(res.voxel_vao);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.image_width * res.image_height);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.animation.width * res.animation.height);
 
     if (res.info_panel.showing_info) {
         glBindTexture(GL_TEXTURE_2D, res.info_panel.info_texture);

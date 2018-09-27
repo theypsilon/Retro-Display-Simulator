@@ -18,6 +18,7 @@ namespace ty {
 	class Camera {
 	public:
 		double movement_speed = 10;
+		double turning_speed = 1;
 
 		void SetPosition(glm::vec3 pos) {
 			camera_position = pos;
@@ -59,7 +60,7 @@ namespace ty {
 		}
 
 		void Turn(CameraDirection direction, double dt) {
-			double velocity = movement_speed * dt * 0.003;
+			double velocity = 20 * dt * 0.003 * turning_speed;
 			switch (direction) {
 				case CameraDirection::LEFT:
 					camera_pitch += velocity;
@@ -81,7 +82,7 @@ namespace ty {
 		}
 
 		void Rotate(CameraDirection direction, double dt) {
-			double velocity = movement_speed * dt * 0.001;
+			double velocity = 60 * dt * 0.001 * turning_speed;
 			switch (direction) {
 				case CameraDirection::LEFT:
 					camera_rotate += velocity;
