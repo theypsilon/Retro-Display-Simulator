@@ -457,7 +457,7 @@ ty::result<Resources> load_resources(Screen screen, const AnimationDescriptor& a
 
     // offset attribute
     glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
     glVertexAttribDivisor(3, 1);
 
     glBindVertexArray(0);
@@ -808,7 +808,7 @@ ty::error update(const Input& input, Resources& res, float delta_time) {
 
     // world transformation
     glBindVertexArray(res.voxel_vao);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, res.animation.width * res.animation.height);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, res.showing_voxels ? 36 : 6, res.animation.width * res.animation.height);
 
     if (res.info_panel.showing_info) {
         glBindTexture(GL_TEXTURE_2D, res.info_panel.info_texture);
