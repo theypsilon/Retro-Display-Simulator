@@ -11,12 +11,12 @@ uniform vec3 lightColor;
 
 void main()
 {
-	if (ObjectColor.a == 0.0) {
-		discard;
-	}
+    if (ObjectColor.a == 0.0) {
+        discard;
+    }
     // ambient
     vec3 ambient = ambientStrength * lightColor;
-  	
+
     // diffuse 
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(lightPos - FragPos);

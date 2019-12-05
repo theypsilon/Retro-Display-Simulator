@@ -16,9 +16,9 @@ uniform float pulse;
 
 void main()
 {
-	float radius = length(aOffset);
-	ObjectColor = aColor;
-    FragPos = aPos / voxel_scale + vec3(aOffset * voxel_gap, 0) + vec3(0, 0, sin(pulse + sin(pulse / 10) * radius / 4) * 2);
+    float radius = length(aOffset);
+    ObjectColor = aColor;
+    FragPos = aPos / voxel_scale + vec3(aOffset * voxel_gap, 0) + vec3(0, 0, sin(pulse + sin(pulse / 10.0) * radius / 4.0) * 2.0);
     Normal = aNormal;  
     
     gl_Position = projection * view * vec4(FragPos, 1.0);
